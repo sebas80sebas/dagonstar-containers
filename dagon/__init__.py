@@ -407,12 +407,7 @@ class Stager(object):
 
         src = src_task.get_scratch_dir() + "/" + local_path
 
-        #get filename from path 
-        intermediate_filename = os.path.basename(local_path)
-
-        dst = dst_path + "/" + os.path.dirname(os.path.abspath(local_path)) + "/" + intermediate_filename
-        #dst = "output.txt"
-
+        dst = dst_path + "/" + os.path.dirname(os.path.abspath(local_path))
 
         # Check if the symbolic link have to be used...
         if data_mover == DataMover.GRIDFTP:
@@ -425,6 +420,10 @@ class Stager(object):
             #tar_path = src + "/data.tar"
             #command_tar = "tar -czvf %s %s --exclude=*.tar" % (tar_path, src_task.get_scratch_dir())
             #result = src_task.execute_command(command_tar)
+
+            #get filename from path 
+            intermediate_filename = os.path.basename(local_path)
+            dst = dst_path + "/" + os.path.dirname(os.path.abspath(local_path)) + "/" + intermediate_filename
 
             gm.copy_data(src, dst, intermediate_filename)# + "/" + "data.tar.gz")
 
