@@ -1,13 +1,15 @@
-# DagOnStar (aka DagOn\*)
-DagOnStar (Direct acyclic graph On anything) is a lightweight Python library implementing
+# DAGonStar (aka DAGon\*)
+DAGonStar (Direct acyclic graph On anything) is a lightweight Python library implementing
 a workflow engine able to execute parallel jobs represented by direct acyclic graphs on
 any combination of local machines, on-premise high-performance computing clusters,
 containers, and cloud-based virtual infrastructures.
 
-DagOnStar is used as the primary workflow engine to run real-world production-level
+ ![The DAGonStar Logo](/figures/DAGonStar_Logo01.png)
+
+DAGonStar is used as the primary workflow engine to run real-world production-level
 applications.
 
-DagOnStar is in production at the [Center for Monitoring and Modeling Marine and Atmosphere](https:/meteo.uniparthenope.it)
+DAGonStar is in production at the [Center for Monitoring and Modeling Marine and Atmosphere](https:/meteo.uniparthenope.it)
 applications hosted at the University of Naples "Parthenope".
 
 # Motivation
@@ -21,6 +23,12 @@ engines is crucial.
 
 # Acknowledgments
 The following initiatives support DAGonStar development:
+
+* Research agreement "Modelling mytilus farming at scale"
+  (MytilX, CUP D13C24000470002, funded by the Istituto Zooprofilattico Sperimentale dell’Umbria e delle Marche) -
+  DAGonStar orchestrates the production workflow to deliver use case, study zones specific, weather, marine, pollutants,
+  and farmed mussels contamination forecasts and predictions.
+
 
 * Research contract "Mytilus farming System with High-Performance Computing and Artificial Intelligence"
   (MytilEx, CUP I63C23000180002, funded by the Campania Region, Veterinary sector) -
