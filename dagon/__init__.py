@@ -1,6 +1,7 @@
 import logging
 import logging.config
 import os
+import json
 from logging.config import fileConfig
 import threading
 import collections
@@ -64,7 +65,7 @@ class Workflow(object):
 
     SCHEMA = "workflow://"
 
-    def __init__(self, name, config=None, config_file='dagon.ini', max_threads=10, jsonload=None):
+    def __init__(self, name, config=None, config_file='dagon.ini', max_threads=10, jsonload=None, checkpoint_file=None):
         """
         Create a workflow
 
@@ -88,10 +89,12 @@ class Workflow(object):
         logging.getLogger("paramiko").setLevel(logging.WARNING)
         logging.getLogger("globus_sdk").setLevel(logging.WARNING)
 
+        self.checkpoint_file = checkpoint_file
         self.logger = logging.getLogger()
         self.dag_tps = None
         self.dry = False
         self.tasks = []
+        self.checkpoints = {}
         self.workflow_id = 0
         self.is_api_available = False
         if jsonload is not None:  # load from json file
@@ -241,8 +244,18 @@ class Workflow(object):
             jsonWorkflow['tasks'][task.name] = task.as_json()
         return jsonWorkflow
 
-    def run(self):
-        self.logger.debug("Running workflow: %s", self.name)
+    def run(self, resume_checkpoint_file = None):
+
+        if resume_checkpoint_file is not None:
+            fp = open(resume_checkpoint_file, "r")
+            self.checkpoints = json.loads(fp.read())
+            fp.close()
+
+            self.logger.debug("Resuming workflow: %s", self.name)
+
+        else:
+            self.logger.debug("Running workflow: %s", self.name)
+
         start_time = time()
         for task in self.tasks:
             try:
@@ -258,6 +271,11 @@ class Workflow(object):
         
         completed_in = (time() - start_time)
         self.logger.info("Workflow '" + self.name + "' completed in %s seconds ---" % completed_in)
+
+        if self.checkpoint_file is not None:
+            fp = open(self.checkpoint_file, 'w')
+            fp.write(json.dumps(self.checkpoints, sort_keys=True, indent=4))
+            fp.close()
 
     def load_json(self, Json_data):
         from dagon.task import DagonTask, TaskType

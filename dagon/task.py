@@ -1,6 +1,6 @@
 import shutil
 import glob
-from json import loads
+from json import loads, dumps
 from threading import Thread
 from threading import Semaphore
 from os import makedirs, path, chmod
@@ -16,12 +16,14 @@ class TaskType(Enum):
     remote tasks are supported by the RemoteClass but it should not be
     explicitly instantiate
 
+    :cvar CHECKPOINT: Explicit checkpoint enabling saving and resuming the workflow run
     :cvar BATCH: Regular Batch task (local or remote)
     :cvar SLURM: Task executed using Slurm (local or remote)
     :cvar CLOUD: Task executed in a cloud instance (ec2, digital ocean and google cloud  tested with libcloud)
     :cvar DOCKER: Task executed on a docker container (local or remote)
     """
 
+    CHECKPOINT = "checkpoint"
     BATCH = "batch"
     SLURM = "slurm"
     CLOUD = "cloud"
@@ -30,6 +32,7 @@ class TaskType(Enum):
 
 # Different types os tasks and their module and class name
 tasks_types = {
+    TaskType.CHECKPOINT: ("dagon.checkpoint", "Checkpoint"),
     TaskType.BATCH: ("dagon.batch", "Batch"),
     TaskType.CLOUD: ("dagon.remote", "CloudTask"),
     TaskType.DOCKER: ("dagon.docker_task", "DockerTask"),
@@ -330,19 +333,31 @@ class Task(Thread):
         """
         self.reference_count = self.reference_count + 1
 
-    # Call garbage collector (remove scratch directory, container, cloud instace, etc)
+    # Call garbage collector (remove scratch directory, container, cloud instance, etc)
     # implemented by each task class
     def on_garbage(self):
         """
         Call garbage collector, removing the scratch directory, containers and instances related to the
         task
         """
+
+        # Perform some logging
+        self.workflow.logger.debug("Removing %s", self.working_dir)
+
         shutil.move(self.working_dir, self.working_dir + "-removed")
 
-    # Decremet the reference count
+        # Update the working directory
+        self.working_dir = self.working_dir + "-removed"
+
+        # Update the checkpoint
+        self.workflow.checkpoints[self.workflow.name + "." + self.getName()]["working_dir"] = self.working_dir
+
+
+
+    # Decrement the reference count
     def decrement_reference_count(self):
         """
-        Decremet the reference count. When the number of references is equals to zero, the garbage collector is called
+        Decrement the reference count. When the number of references is equals to zero, the garbage collector is called
         """
         self.reference_count = self.reference_count - 1
 
@@ -350,8 +365,12 @@ class Task(Thread):
         if self.reference_count == 0 and self.remove_scratch_dir is True:
             # Call garbage collector (remove scratch directory, container, cloud instace, etc)
             self.on_garbage()
-            # Perform some logging
-            self.workflow.logger.debug("Removed %s", self.working_dir)
+
+            if self.workflow.checkpoint_file is not None:
+                fp = open(self.workflow.checkpoint_file, 'w')
+                fp.write(dumps(self.workflow.checkpoints, sort_keys=True, indent=4))
+                fp.close()
+
 
     def set_semaphore(self, sem):
         self.semaphore = sem
@@ -562,9 +581,9 @@ class Task(Thread):
                                      transversal_task['command'],
                                      transversal_workflow=workflow_id, working_dir=task_path)
 
-            # Check if the refernced task is consistent
+            # Check if the referenced task is consistent
             if task is not None:
-                # Evaluate the destiation path
+                # Evaluate the destination path
                 dst_path = self.working_dir + "/.dagon/inputs/" + workflow_name + "/" + task_name
 
                 # Create the destination directory
@@ -780,23 +799,40 @@ class Task(Thread):
 
         :raises Exception: a problem occurred during the task  execution
         """
-        self.create_working_dir()
+        key = self.workflow.name + "." + self.getName()
 
-        # Apply some command pre processing
-        launcher_script = self.pre_process_command(self.command)
-        # Apply some command post processing
-        launcher_script = self.post_process_command(launcher_script)
+        if key in self.workflow.checkpoints and self.workflow.checkpoints[key]["code"] == 0 and path.isdir(self.workflow.checkpoints[key]["working_dir"]):
+            self.working_dir = self.workflow.checkpoints[key]["working_dir"]
 
-        # Execute only if not dry
-        if self.workflow.dry is False:
-            # Invoke the actual executor
-            start_time = time()
-            self.result = self.on_execute(launcher_script, "launcher.sh")
-            self.workflow.logger.debug("%s Completed in %s seconds ---" % (self.name, (time() - start_time)))
-            #print(self.result)
-            # Check if the execution failed
-            if self.result['code']:
-                raise Exception('Executable raised a execption ' + self.result['message'])
+            self.workflow.logger.debug("%s Already completed ---" % (self.name))
+        else:
+            self.create_working_dir()
+
+            self.workflow.checkpoints[self.workflow.name + "." + self.getName()] = {
+                "working_dir": self.working_dir,
+                "workflow": self.workflow.name,
+                "name": self.name
+            }
+
+            # Apply some command pre processing
+            launcher_script = self.pre_process_command(self.command)
+            # Apply some command post processing
+            launcher_script = self.post_process_command(launcher_script)
+
+            # Execute only if not dry
+            if self.workflow.dry is False:
+
+                # Invoke the actual executor
+                start_time = time()
+                self.result = self.on_execute(launcher_script, "launcher.sh")
+                self.workflow.logger.debug("%s Completed in %s seconds ---" % (self.name, (time() - start_time)))
+                #print(self.result)
+
+                self.workflow.checkpoints[key]["code"] = self.result['code']
+
+                # Check if the execution failed
+                if self.result['code']:
+                    raise Exception('Executable raised a execption ' + self.result['message'])
 
         self.remove_reference_workflow()
 
