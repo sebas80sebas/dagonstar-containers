@@ -21,6 +21,29 @@ computational scientists. However, nowadays, any science field can be considered
 "computational" if the availability of powerful but easy-to-manage workflow
 engines is crucial.
 
+# Features
+
+* Workflows described as a Python script
+* Fully supporting the workflow:// schema
+* Supported task types:
+  * Local
+  * Bash
+  * Remote
+  * Slurm
+  * REST
+  * Cloud (AWS, Digital Ocean, Google Grid, Azure, OpenStack)
+  * Container (Docker)
+  * IoT (Compute Continuum)
+* Task related data locality
+* Transparent staging technologies
+  * Link
+  * Copy
+  * Secure Copy
+  * Globus
+* Parallel patterns
+* Implicit and explicit checkpoint system
+* Garbage collector for scratch directory footprint minimization
+
 # Acknowledgments
 The following initiatives support DAGonStar development:
 
