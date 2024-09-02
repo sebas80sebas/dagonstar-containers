@@ -246,7 +246,7 @@ class Workflow(object):
 
     def run(self, resume_checkpoint_file = None):
 
-        if resume_checkpoint_file is not None:
+        if resume_checkpoint_file is not None and os.path.isfile(resume_checkpoint_file) and os.stat(resume_checkpoint_file).st_size > 0:
             fp = open(resume_checkpoint_file, "r")
             self.checkpoints = json.loads(fp.read())
             fp.close()

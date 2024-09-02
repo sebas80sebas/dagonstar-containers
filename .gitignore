@@ -114,3 +114,5 @@ examples/dataflow/batch/dataflow-demo.json
 examples/dataflow/batch/pruebasdagon
 examples/dataflow/batch/pruebasdagon.pub
 examples/dataflow/batch/dataflow-demo-remote-test.py
+examples/dataflow/batch/Checkpoint_1.json
+examples/dataflow/batch/last_run.json
