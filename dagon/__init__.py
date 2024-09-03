@@ -454,9 +454,9 @@ class Stager(object):
         elif data_mover == DataMover.LINK:
             # Add the link command
             command = command + "# Add the link command\n"
-            cmd = "ls $file $dst"
+            cmd = "ln -sf $file $dst"
             if StagerMover(self.stager_mover) == StagerMover.PARALLEL:
-                cmd = "ls {} $dst"
+                cmd = "ln -sf {} $dst"
             command = command + self.generate_command(src, dst, cmd, self.stager_mover.value)
                       
         # Check if the copy have to be used...
