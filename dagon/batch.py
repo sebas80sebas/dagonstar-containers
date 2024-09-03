@@ -44,6 +44,7 @@ class Batch(Task):
         #    return super(Task, cls).__new__(RemoteBatch)
         #else:
         #    return super(Batch, cls).__new__(cls, *args, **kwargs)
+        
         if "ip" in kwargs:
             return super().__new__(RemoteBatch)
         else:
@@ -150,7 +151,7 @@ class RemoteBatch(RemoteTask, Batch):
         :param globusendpoint: Globus endpoint ID
         :type globusendpoint: str
         """
-        RemoteTask.__init__(self, name, ssh_username, keypath, command, ip=ip, working_dir=working_dir,
+        RemoteTask.__init__(self, name, command, ssh_username=ssh_username, keypath=keypath, ip=ip, working_dir=working_dir,
                             globusendpoint=globusendpoint)
 
     def on_execute(self, launcher_script, script_name):
