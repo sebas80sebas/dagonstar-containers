@@ -289,26 +289,32 @@ class Workflow(object):
 
     def Validate_WF(self):
         """
-        Validate the workflow to avoid any kind of cycle on the grap
+        Validate the workflow to avoid any kind of cycle in the graph.
 
-        Raise an Exception when a cylce is founded
+        Raise an Exception if a cycle is found.
         """
-        needed = []
-        needy = []
+        def visit(task, visited, stack):
+            if task in stack:  # If the task is already in the exploration stack, we've found a cycle
+                raise Exception(f"A cycle has been found involving task {task.name}")
+            
+            if task in visited:
+                return  # Task already visited, no cycle detected
+            
+            # Mark the task as visited and explore the successors
+            visited.add(task)
+            stack.append(task)  # Add the task to the exploration stack
+
+            for next_task in task.nexts:  # Explore the next tasks
+                visit(next_task, visited, stack)
+            
+            stack.pop()  # Remove the task from the stack after exploration
+
+        visited = set()  # Set of already visited tasks
+        stack = []   # Stack for detecting cycles
+
         for task in self.tasks:
-            for prev in task.prevs:
-                bool_needed = False
-                bool_needy = False
-                needed.append(prev)  # dependency task is added
-                if task in needed or task.nexts in needed: bool_needed = True  # are you or your decendents needed?
-                if prev in needy: bool_needy = True  # that who you need is also needed?
-                if bool_needy and bool_needed:
-                    logging.warning('A cycle have been found')
-                    raise Exception("A cycle have been found from %s to %s" % (prev.name, task.name))
-                else:
-                    needy.append(task)  # add the task and decendets to the needys array
-                    for t in task.nexts:
-                        needy.append(t)
+            if task not in visited:
+                visit(task, visited, stack)
 
 
 class DataMover(Enum):
