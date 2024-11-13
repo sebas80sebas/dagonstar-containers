@@ -801,7 +801,7 @@ class Task(Thread):
         """
         key = self.workflow.name + "." + self.getName()
 
-        if key in self.workflow.checkpoints and self.workflow.checkpoints[key]["code"] == 0 and path.isdir(self.workflow.checkpoints[key]["working_dir"]):
+        if key in self.workflow.checkpoints and "code" in self.workflow.checkpoints[key] and self.workflow.checkpoints[key]["code"] == 0 and path.isdir(self.workflow.checkpoints[key]["working_dir"]):
             self.working_dir = self.workflow.checkpoints[key]["working_dir"]
 
             self.workflow.logger.debug("%s Already completed ---" % (self.name))
