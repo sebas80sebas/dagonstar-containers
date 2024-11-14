@@ -13,7 +13,7 @@ scratch_dir_base=/tmp/
 remove_dir=False
 threads=1
 
-[sulrm]
+[slurm]
 partition=
 
 [ec2]
