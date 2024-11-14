@@ -543,7 +543,7 @@ case $mode in
     ;;
     2)
     # Run in parallel using slurm
-    job_id=$(sbatch --partition=$partition --ntasks=1 --cpus-per-task=1 --mem=1024 --wrap="$cmd" | awk '{print $4}')
+    job_id=$(sbatch --partition=$partition --ntasks=1 --cpus-per-task=1 --mem=1024 --wrap="$cmd" | awk '{{print $4}}')
     job_ids+=($job_id)
     ;;
     *)
@@ -554,11 +554,11 @@ esac
 done
 
 # Wait for all sbatch jobs to complete
-if [ "${#job_ids[@]}" -gt 0 ]; then
+if [ "${{#job_ids[@]}}" -gt 0 ]; then
     echo "Waiting for all copies to complete..."
     while true; do
         # Check if any jobs are still in the queue
-        pending_jobs=$(squeue -j "${job_ids[*]}" -h -o '%A')
+        pending_jobs=$(squeue -j "${{job_ids[*]}}" -h -o '%A')
         if [ -z "$pending_jobs" ]; then
             break
         fi
@@ -566,5 +566,4 @@ if [ "${#job_ids[@]}" -gt 0 ]; then
         sleep 5
     done
 fi
-
-        """.format(src, dst, mode, self.cfg["batch"]["threads"], self.cfg["sulrm"]["partition"], cmd)
+        """.format(src, dst, mode, self.cfg["batch"]["threads"], self.cfg["slurm"]["partition"], cmd)
