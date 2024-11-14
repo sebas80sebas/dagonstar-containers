@@ -543,7 +543,7 @@ case $mode in
     ;;
     2)
     # Run in parallel using slurm
-    job_id=$(sbatch -job-name=stagein --partition=$partition --ntasks=1 --cpus-per-task=1 --mem=1024 --wrap="$cmd" | awk '{{print $4}}')
+    job_id=$(sbatch --job-name=stagein --partition=$partition --ntasks=1 --cpus-per-task=1 --mem=1024 --wrap="$cmd" | awk '{{print $4}}')
     job_ids+=($job_id)
     ;;
     *)
