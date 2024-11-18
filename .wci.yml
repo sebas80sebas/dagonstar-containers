@@ -1,0 +1,21 @@
+name: DagOnStar
+
+icon: https://raw.githubusercontent.com/DagOnStar/dagonstar/refs/heads/master/figures/DAGonStar_Logo01.png
+
+headline: DAGonStar is a simple Python-based workflow engine that runs jobs on everything from the local machine to distributed virtual HPC clusters hosted in private and public clouds.
+
+description: DAGonStar (Direct acyclic graph On anything) is a lightweight Python library implementing a workflow engine able to execute parallel jobs represented by direct acyclic graphs on any combination of local machines, on-premise high-performance computing clusters, containers, and cloud-based virtual infrastructures.
+
+language: Python
+            
+execution_environment:
+  interfaces:
+    - CommandLine
+  resource_managers:
+    - Local
+    - SSH
+    - Docker
+    - SLURM
+    - Cloud (AWS, Digital Ocean, Google Grid, Azure, OpenStack)
+  transfer_protocols:
+    - SCP
