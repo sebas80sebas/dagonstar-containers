@@ -800,6 +800,9 @@ class Task(Thread):
 
             # Go to the next element
             pos = pos2
+    
+        if len(self.nexts) == 0 and self.remove_scratch_dir is True:
+            self.on_garbage()
 
     # Method execute
     def execute(self):
