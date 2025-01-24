@@ -146,8 +146,6 @@ class Task(Thread):
         self.stager_mover = None
         self.mode = "sequential"
         self.globusendpoint = globusendpoint
-        #print("endpoint: ", endpoint)
-        #print("endpoint: ", self.endpoint)
 
     def get_endpoint(self):
         return self.globusendpoint
@@ -279,6 +277,9 @@ class Task(Thread):
         :type  DAG_tps: :class:`dagon.dag_tps`
         """
         self.dag_tps = DAG_tps
+        
+    def exists_dir(self, path):
+        pass
 
     # Set the current status
     def set_status(self, status):
@@ -476,7 +477,6 @@ class Task(Thread):
         :return: command preprocessed
         :rtype: str
         """
-        #print(self.workflow.cfg["globus"])
         stager = dagon.Stager(self.data_mover, self.stager_mover, self.workflow.cfg)
 
         # Initialize the script
@@ -503,7 +503,7 @@ class Task(Thread):
         header = header + "cd " + self.working_dir + "\n"
         header = header + "if [ $? -ne 0 ]; then code=1; fi \n\n"
         header = header + "# Start staging in\n\n"
-
+        
         # Create the body
         body = command
 
@@ -812,8 +812,12 @@ class Task(Thread):
         :raises Exception: a problem occurred during the task  execution
         """
         key = self.workflow.name + "." + self.getName()
+        
+        if key in self.workflow.checkpoints and "code" in self.workflow.checkpoints[key] and self.workflow.checkpoints[key]["code"] == 0 and path.isdir(self.workflow.checkpoints[key]["working_dir"]): #Local checkpoint
+            self.working_dir = self.workflow.checkpoints[key]["working_dir"]
 
-        if key in self.workflow.checkpoints and "code" in self.workflow.checkpoints[key] and self.workflow.checkpoints[key]["code"] == 0 and path.isdir(self.workflow.checkpoints[key]["working_dir"]):
+            self.workflow.logger.debug("%s Already completed ---" % (self.name))
+        elif self.ssh_connection != None and  key in self.workflow.checkpoints and "code" in self.workflow.checkpoints[key] and self.workflow.checkpoints[key]["code"] == 0 and self.exists_dir(self.workflow.checkpoints[key]["working_dir"]):
             self.working_dir = self.workflow.checkpoints[key]["working_dir"]
 
             self.workflow.logger.debug("%s Already completed ---" % (self.name))
@@ -838,7 +842,6 @@ class Task(Thread):
                 start_time = time()
                 self.result = self.on_execute(launcher_script, "launcher.sh")
                 self.workflow.logger.debug("%s Completed in %s seconds ---" % (self.name, (time() - start_time)))
-                #print(self.result)
 
                 self.workflow.checkpoints[key]["code"] = self.result['code']
 

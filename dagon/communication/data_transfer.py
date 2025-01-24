@@ -47,9 +47,6 @@ class GlobusManager:
 
         globus_auth_token = globus_auth_data["access_token"]
         transfer_token = globus_transfer_data["access_token"]
-
-        #print("AUTH GLOBUS TOKEN    ", globus_auth_token)
-        #print("TRANSFER TOKEN    ", transfer_token)
         
         authorizer = globus_sdk.AccessTokenAuthorizer(transfer_token)
         self.transfer_client = globus_sdk.TransferClient(authorizer=authorizer)
@@ -74,9 +71,6 @@ class GlobusManager:
         :return: status of the transference
         :rtype: str
         """
-
-        print("ori: ", self._from)
-        print("destiny: ", self._to)
 
         task_data = globus_sdk.TransferData(
             source_endpoint=self._from, destination_endpoint=self._to
@@ -174,7 +168,7 @@ class GlobusManager:
         else:
             res = self.copy_file(ori, destiny, intermediate)
 
-        if res is not "OK":
+        if res != "OK":
             raise Exception(res)
 
 

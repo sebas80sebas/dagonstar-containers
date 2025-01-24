@@ -54,7 +54,6 @@ class RemoteTask(Task):
         self.keypath = abspath(keypath) if keypath is not None else keypath
         self.ssh_username = ssh_username
         self.ssh_connection = None
-        #print name, self.ip, self.ssh_username
         if self.ip is not None and self.ssh_username is not None:
             self.ssh_connection = SSHManager(self.ssh_username, self.ip, self.keypath)
 
@@ -97,7 +96,6 @@ class RemoteTask(Task):
 
         :raises Exception: a problem occurred while the creation of the directory
         """
-        #print self.ssh_connection
         res = self.ssh_connection.execute_command( "mkdir -p " + self.working_dir + "/.dagon")
         if res['code']:
             self.workflow.logger.error("%s: Error creating scratch directory on server %s", self.name, res['message'])
@@ -108,9 +106,17 @@ class RemoteTask(Task):
         """
         Remove the scratch directory on the remote machine
         """
+        self.workflow.logger.debug("Removing %s", self.working_dir)
+        
         self.ssh_connection.execute_command('mv {0} {1}'.format(self.working_dir,
                                             self.working_dir + "-removed"))
 
+        # Update the working directory
+        self.working_dir = self.working_dir + "-removed"
+        
+        # Update the checkpoint
+        self.workflow.checkpoints[self.workflow.name + "." + self.getName()]["working_dir"] = self.working_dir
+        
     def get_public_key(self):
         """
         Return the temporal public key to this machine
@@ -121,6 +127,18 @@ class RemoteTask(Task):
         command = "cat " + self.working_dir + "/.dagon/ssh_key.pub"
         result = self.ssh_connection.execute_command(command)
         return result['output']
+    
+    def exists_dir(self, path):
+        try:
+            # Run command to check if directory exists
+            command = f'if [ -d "{path}" ]; then echo "exists"; else echo "not exists"; fi'
+            res = self.ssh_connection.execute_command(command)
+        
+            return res["output"] == "exists\n"
+
+        except Exception as e:
+            self.workflow.logger.error(f"An error occurred: {e}")
+            return False
 
 
 class CloudTask(RemoteTask):
@@ -242,6 +260,3 @@ class CloudTask(RemoteTask):
 
         """
         RemoteTask.on_garbage(self)
-        #if self.stop_instance:
-        #    print("hola")
-        #    self.ssh_connection.execute_command("shutdown -h now")

@@ -108,7 +108,7 @@ class DockerTask(Batch):
         except docker.errors.ImageNotFound:
             self.workflow.logger.error("%s: Image %s not found", self.name, image)
         except docker.errors.APIError as e:
-            print(f"An error occurred: {e}")
+            self.workflow.logger.error(f"An error occurred: {e}")
 
         #return self.docker_client.pull_image(image)
 

@@ -1,4 +1,4 @@
-from configparser import SafeConfigParser
+from configparser import ConfigParser
 from collections import defaultdict
 
 """
@@ -19,7 +19,7 @@ def read_config(file_config="dagon.ini", section=None):
     :return: dictionary with the configuration
     :rtype: dict(str, dict)
     """
-    config = SafeConfigParser()
+    config = ConfigParser()
     config.read(file_config)
     if section is not None:
         try:
@@ -31,6 +31,5 @@ def read_config(file_config="dagon.ini", section=None):
         for section in config.sections():
             dictionary[section] = {}
             for option in config.options(section):
-                # print option
                 dictionary[section][option] = config.get(section, option, raw=True)
         return dictionary

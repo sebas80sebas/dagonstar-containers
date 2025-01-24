@@ -135,7 +135,6 @@ class DAG_TPS(object):
         self.logger.debug("Running meta-workflow: %s", self.name)
         self.running=True
         start_time = time()
-        #print self.tasks
         workflows= []
         for wf in self.workflows:
             workflows.append(threading.Thread(target=wf.run))

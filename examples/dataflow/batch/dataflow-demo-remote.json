@@ -41,13 +41,80 @@
       "type": "remotebatch",
       "working_dir": null
     },
+    "Checkpoint_1": {
+      "command": "__WORKDIR__/.dagon/checkpoint.sh workflow:///D/f3.txt",
+      "name": "Checkpoint_1",
+      "nexts": [
+        "E"
+      ],
+      "prevs": [
+        "D"
+      ],
+      "status": "READY",
+      "type": "checkpoint",
+      "working_dir": null
+    },
     "D": {
       "command": "cat workflow:///B/f2.txt >> f3.txt; cat workflow:///C/f2.txt >> f3.txt",
       "name": "D",
-      "nexts": [],
+      "nexts": [
+        "Checkpoint_1"
+      ],
       "prevs": [
         "B",
         "C"
+      ],
+      "status": "READY",
+      "type": "remotebatch",
+      "working_dir": null
+    },
+    "E": {
+      "command": "mkdir output;cp workflow:///Checkpoint_1/DataFlow-Checkpoint-Demo/D/f3.txt output/f4.txt",
+      "name": "E",
+      "nexts": [
+        "F",
+        "G"
+      ],
+      "prevs": [
+        "Checkpoint_1"
+      ],
+      "status": "READY",
+      "type": "remotebatch",
+      "working_dir": null
+    },
+    "F": {
+      "command": "echo $RANDOM > f5.txt; cat workflow:///E/output/f4.txt >> f5.txt",
+      "name": "F",
+      "nexts": [
+        "H"
+      ],
+      "prevs": [
+        "E"
+      ],
+      "status": "READY",
+      "type": "remotebatch",
+      "working_dir": null
+    },
+    "G": {
+      "command": "echo $RANDOM > f6.txt; cat workflow:///E/output/f4.txt >> f6.txt",
+      "name": "G",
+      "nexts": [
+        "H"
+      ],
+      "prevs": [
+        "E"
+      ],
+      "status": "READY",
+      "type": "remotebatch",
+      "working_dir": null
+    },
+    "H": {
+      "command": "cat workflow:///F/f5.txt >> f7.txt; cat workflow:///G/f6.txt >> f7.txt",
+      "name": "H",
+      "nexts": [],
+      "prevs": [
+        "F",
+        "G"
       ],
       "status": "READY",
       "type": "remotebatch",

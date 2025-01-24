@@ -1,5 +1,4 @@
 import paramiko
-from fabric.api import local
 from paramiko import SSHClient
 
 from dagon.communication import is_port_open

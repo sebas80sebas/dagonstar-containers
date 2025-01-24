@@ -1,5 +1,5 @@
-from fabric.api import local, settings, hide
-
+#from fabric.api import local, settings, hide
+from subprocess import Popen, PIPE, STDOUT
 
 class DockerClient(object):
     """
@@ -17,18 +17,28 @@ class DockerClient(object):
         :rtype: dict(str, object)
         """
 
-        with settings(
-                hide('warnings', 'running', 'stdout', 'stderr'),
-                warn_only=True
-        ):
-            res = local(command, capture=True)
+        # with settings(
+        #         hide('warnings', 'running', 'stdout', 'stderr'),
+        #         warn_only=True
+        # ):
+        #     res = local(command, capture=True)
 
-            if len(res.stderr):
-                return {"code": 1, "message": res.stderr}
-            elif res.return_code != 0:
-                return {"code": 1, "message": res.stdout}
-            else:
-                return {"code": 0, "output": res.stdout}
+        #     if len(res.stderr):
+        #         return {"code": 1, "message": res.stderr}
+        #     elif res.return_code != 0:
+        #         return {"code": 1, "message": res.stdout}
+        #     else:
+        #         return {"code": 0, "output": res.stdout}
+        
+        p = Popen(command.split(" "), stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True, bufsize=-1, universal_newlines=True)
+        
+        out, err = p.communicate()
+
+        code, message = 0, ""
+        if len(err):
+            code, message = 1, err
+        return {"code": code, "message": message, "output": out}
+
 
     @staticmethod
     def form_string_cont_creation(image, command=None, volume=None, dagon_volume=None, ports=None):
@@ -91,12 +101,8 @@ class DockerRemoteClient(DockerClient):
         :return: execution results
         :rtype: dict(str, object)
         """
-        with settings(
-                hide('warnings', 'running', 'stdout', 'stderr'),
-                warn_only=True
-        ):
-            result = self.ssh.execute_command(command)
-            return result
+        result = self.ssh.execute_command(command)
+        return result
 
 
 class Container(object):

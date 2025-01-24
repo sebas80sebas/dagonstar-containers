@@ -1,6 +1,3 @@
-from fabric.api import local, env
-from fabric.context_managers import settings, hide
-
 from dagon.task import Task
 from dagon.remote import RemoteTask
 from subprocess import Popen, PIPE, STDOUT
@@ -73,7 +70,7 @@ class Batch(Task):
         #
         #     return {"code": code, "message": message, "output": result.stdout}
         p = Popen(command.split(" "), stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True, bufsize=-1, universal_newlines=True)
-        #print "commmand",command
+        
         out, err = p.communicate()
 
         code, message = 0, ""
