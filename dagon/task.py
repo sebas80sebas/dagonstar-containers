@@ -448,6 +448,8 @@ class Task(Thread):
                 # Add the reference from the task
                 task.increment_reference_count()
 
+                # TODO: check this code
+                """
                 if self.mode == "parallel":
                     for next_task in self.nexts:
                         if self in next_task.prevs:
@@ -455,6 +457,7 @@ class Task(Thread):
                         
                         for new_task in self.new_tasks:
                             next_task.add_dependency_to(new_task)
+                """
 
             if task is None:  # if is None means that task is from another WF maybe in the dagon service
                 #self.workflow.logger.debug("Adding transversal point")
