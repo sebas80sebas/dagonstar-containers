@@ -10,6 +10,7 @@ ip = localhost
 
 [batch]
 scratch_dir_base=/tmp/
+run_base=
 remove_dir=False
 threads=1
 

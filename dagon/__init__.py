@@ -13,6 +13,7 @@ from enum import Enum
 from requests.exceptions import ConnectionError
 
 from time import time, sleep
+from datetime import datetime
 
 from dagon.config import read_config
 from dagon.api import API
@@ -89,6 +90,7 @@ class Workflow(object):
         logging.getLogger("paramiko").setLevel(logging.WARNING)
         logging.getLogger("globus_sdk").setLevel(logging.WARNING)
 
+        self._scratch_dir = None
         self.checkpoint_file = checkpoint_file
         self.logger = logging.getLogger()
         self.dag_tps = None
@@ -156,7 +158,20 @@ class Workflow(object):
         :return: Absolute path to the scratch directory
         :rtype: str with absolute path to the base scratch directory
         """
-        return self.cfg['batch']['scratch_dir_base']
+        if self._scratch_dir is None:
+            base_dir = self.cfg['batch']['scratch_dir_base']
+            run_base = self.cfg['batch'].get('run_base', '')
+
+            if run_base:
+                millis = int(round(time() * 1000))
+                run_base = run_base.replace("__MILLIS__", str(millis))
+
+                subdir_name = datetime.now().strftime(run_base)
+                self._scratch_dir = os.path.join(base_dir, subdir_name)
+            else:
+                self._scratch_dir = base_dir
+    
+        return self._scratch_dir
 
     def find_task_by_name(self, workflow_name, task_name):
         """
@@ -253,6 +268,7 @@ class Workflow(object):
 
             self.logger.debug("Resuming workflow: %s", self.name)
 
+            self._scratch_dir = self.checkpoints.get('_scratch_dir', None)
         else:
             self.logger.debug("Running workflow: %s", self.name)
 
@@ -273,6 +289,7 @@ class Workflow(object):
         self.logger.info("Workflow '" + self.name + "' completed in %s seconds ---" % completed_in)
 
         if self.checkpoint_file is not None:
+            self.checkpoints['_scratch_dir'] = self.get_scratch_dir_base()
             fp = open(self.checkpoint_file, 'w')
             fp.write(json.dumps(self.checkpoints, sort_keys=True, indent=4))
             fp.close()
