@@ -1,3 +1,4 @@
+import shlex
 from dagon.task import Task
 from dagon.remote import RemoteTask
 from subprocess import Popen, PIPE, STDOUT
@@ -69,7 +70,7 @@ class Batch(Task):
         #         code, message = 1, result.stderr
         #
         #     return {"code": code, "message": message, "output": result.stdout}
-        p = Popen(command.split(" "), stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True, bufsize=-1, universal_newlines=True)
+        p = Popen(shlex.split(command), stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True, bufsize=-1, universal_newlines=True)
         
         out, err = p.communicate()
 
@@ -388,4 +389,3 @@ class RemoteSlurm(RemoteTask, Slurm):
         # Execute the bash command
         result = self.ssh_connection.execute_command(command)
         return result
-
