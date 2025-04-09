@@ -177,12 +177,24 @@ class Slurm(Batch):
     :ivar partition: partition where the task will be executed
     :vartype partition: str
 
-    :ivar ntask: number of parallel tasks to be executed
-    :vartype ntask: int
+    :ivar ntasks: number of parallel tasks to be executed
+    :vartype ntasks: int
+
+    :ivar memory: memory allocation per node
+    :vartype memory: int
+
+    :ivar time: maximum runtime in format HH:MM:SS
+    :vartype time: str
+
+    :ivar nodes: number of nodes to request
+    :vartype nodes: int
+
+    :ivar ntasks_per_node: number of tasks per node
+    :vartype ntasks_per_node: int
     """
 
-    def __init__(self, name, command, partition=None, ntasks=None, memory=None, working_dir=None, globusendpoint=None):
-
+    def __init__(self, name, command, partition=None, ntasks=None, memory=None, 
+                time=None, nodes=None, ntasks_per_node=None, working_dir=None, globusendpoint=None):
         """
         :param name: name of the task
         :type name: str
@@ -199,6 +211,15 @@ class Slurm(Batch):
         :param memory: number of memory to be allocate
         :type memory: int
 
+        :param time: maximum runtime in format HH:MM:SS
+        :type time: str
+
+        :param nodes: number of nodes to request
+        :type nodes: int
+
+        :param ntasks_per_node: number of tasks per node
+        :type ntasks_per_node: int
+
         :param working_dir: path to the task's working directory
         :type working_dir: str
 
@@ -210,16 +231,22 @@ class Slurm(Batch):
         self.partition = partition
         self.ntasks = ntasks
         self.memory = memory
+        self.time = time
+        self.nodes = nodes
+        self.ntasks_per_node = ntasks_per_node
 
     def __new__(cls, *args, **kwargs):
         """Create an Slurm task local or remote
 
-           Keyword arguments:
-           name -- task name
-           command -- command to be executed
-           partition -- partition where the task is going to be executed
-           ntasks -- number of tasks to execute
-           working_dir -- directory where the outputs will be placed
+            Keyword arguments:
+            name -- task name
+            command -- command to be executed
+            partition -- partition where the task is going to be executed
+            ntasks -- number of tasks to execute
+            working_dir -- directory where the outputs will be placed
+            time -- maximum runtime in format HH:MM:SS
+            nodes -- number of nodes to request
+            ntasks_per_node -- number of tasks per node
         """
 
         if "ip" in kwargs:
@@ -251,10 +278,25 @@ class Slurm(Batch):
         if self.memory is not None:
             memory_text = "--mem=" + str(self.memory)
 
+        time_text = ""
+        if self.time is not None:
+            time_text = "--time=" + self.time
+        
+        nodes_text = ""
+        if self.nodes is not None:
+            nodes_text = "--nodes=" + str(self.nodes)
+        
+        ntasks_per_node_text = ""
+        if self.ntasks_per_node is not None:
+            ntasks_per_node_text = "--ntasks-per-node=" + str(self.ntasks_per_node)
+
         # Add the slurm batch command
-        # command = "sbatch " + partition_text + " " + ntasks_text + " --job-name=" + self.name + " --chdir=" + self.working_dir + " --output=" + self.working_dir + "/.dagon/stdout.txt --wait " + self.working_dir+"/.dagon/launcher.sh"
-        command = "sbatch " + partition_text + " " + ntasks_text + " " + memory_text + " -J " + self.name + " -D " \
-                  + self.working_dir + " -W " + self.working_dir + "/.dagon/" + script_name
+        command = "sbatch " + partition_text + " " + ntasks_text + " " + memory_text + " " + \
+                 time_text + " " + nodes_text + " " + ntasks_per_node_text + " " + \
+                 "--job-name=" + self.name + " --chdir=" + self.working_dir + \
+                 " --output=" + self.working_dir + "/.dagon/stdout.txt --wait " + \
+                 self.working_dir+"/.dagon/" + script_name
+        
         return command
 
     def on_execute(self, script, script_name):
