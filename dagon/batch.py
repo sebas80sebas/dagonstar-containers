@@ -292,11 +292,8 @@ class Slurm(Batch):
             ntasks_per_node_text = "--ntasks-per-node=" + str(self.ntasks_per_node)
 
         # Add the slurm batch command
-        command = "sbatch " + partition_text + " " + ntasks_text + " " + memory_text + " " + \
-                 time_text + " " + nodes_text + " " + ntasks_per_node_text + " " + \
-                 "--job-name=" + self.name + " --chdir=" + self.working_dir + \
-                 " --output=" + self.working_dir + "/.dagon/stdout.txt --wait " + \
-                 self.working_dir+"/.dagon/" + script_name
+        command = "sbatch " + partition_text + " " + ntasks_text + " " + memory_text + " " + time_text + " " + nodes_text + " " + ntasks_per_node_text + " " \
+                   + " -J " + self.name + " -D " + self.working_dir + " -W " + self.working_dir + "/.dagon/" + script_name
         
         return command
 
