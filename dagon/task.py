@@ -556,7 +556,7 @@ class Task(Thread):
             task_name = elements[1]
 
             # Get the rest of the string as local path
-            local_path = arg.replace(workflow_name + "/" + task_name, "")
+            local_path = "/" + "/".join(elements[2:])
 
             # Set the default workflow name if needed
             if workflow_name is None or workflow_name == "":
