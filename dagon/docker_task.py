@@ -1,8 +1,5 @@
 from dagon import Batch
 from dagon.remote import RemoteTask
-from dagon.dockercontainer import Container
-from dagon.dockercontainer import DockerClient
-from dagon.dockercontainer import DockerRemoteClient
 from dagon.task import Task
 
 import docker
@@ -20,8 +17,7 @@ class DockerTask(Batch):
 
     """
 
-    def __init__(self, name, command, image=None, container_id=None, working_dir=None, globusendpoint=None, remove=True, volume=None,transversal_workflow=None):
-
+    def __init__(self, name, command, image=None, container_id=None, working_dir=None, globusendpoint=None, remove=True, volume=None, transversal_workflow=None):
         """
         :param name: task name
         :type name: str
@@ -42,14 +38,17 @@ class DockerTask(Batch):
         :type remove: bool
         """
 
-        Task.__init__(self, name, command, working_dir=working_dir,transversal_workflow=transversal_workflow, globusendpoint=globusendpoint)
+        Task.__init__(self, name, command, working_dir=working_dir,
+                      transversal_workflow=transversal_workflow, globusendpoint=globusendpoint)
         self.command = command
         self.container_id = container_id
         self.container = None
         self.remove = remove
         self.image = image
         self.volume = volume
-        self.docker_client = DockerClient()
+        self.docker_client2 = docker.from_env()
+
+        # self.docker_client = DockerClient()
 
     def __new__(cls, *args, **kwargs):
         if "ip" in kwargs:
@@ -70,8 +69,8 @@ class DockerTask(Batch):
 
         body = super(DockerTask, self).include_command(body)
         body = "cd " + self.working_dir + ";" + body
-        body = self.container.exec_in_cont(body) + "\n"
-        return body
+        command = "docker exec -t " + self.container.id + " sh -c \"" + body.strip() + "\" \n"
+        return command
 
     def pre_process_command(self, command):
         """
@@ -85,8 +84,9 @@ class DockerTask(Batch):
         """
 
         if self.container is None:
-            self.container_id = self.create_container() if self.container_id is None else self.container_id
-            self.container = Container(self.container_id.rstrip(), self.docker_client)
+            self.container = self.create_container()
+        else:
+            self.container = self.get_running_container()
         return super(DockerTask, self).pre_process_command(command)
 
     def pull_image(self, image):
@@ -100,17 +100,14 @@ class DockerTask(Batch):
         :rtype: dict()
         """
 
-        client = docker.from_env()  # Connect to the Docker daemon
-
         try:
-            client.images.pull(image)  # Pull the Docker image
-            self.workflow.logger.info("%s: Successfully pulled %s", self.name, image)
-        except docker.errors.ImageNotFound:
-            self.workflow.logger.error("%s: Image %s not found", self.name, image)
+            self.docker_client2.images.pull(image)  # Pull the Docker image
+            self.workflow.logger.info(
+                "%s: Successfully pulled %s", self.name, image)
         except docker.errors.APIError as e:
             self.workflow.logger.error(f"An error occurred: {e}")
 
-        #return self.docker_client.pull_image(image)
+        # return self.docker_client.pull_image(image)
 
     # Create a Docker container
     def create_container(self):
@@ -123,18 +120,30 @@ class DockerTask(Batch):
         :raises Exception: a problem occurred while container creation
         """
 
-        self.pull_image(self.image) #pull image
+        self.pull_image(self.image)  # pull image
 
+        volumes = {
+            self.workflow.get_scratch_dir_base(): {"bind": self.workflow.get_scratch_dir_base(), "mode": "rw"},
+        }
 
-        command = DockerClient.form_string_cont_creation(image=self.image,
-                                                         volume=self.volume,
-                                                         dagon_volume={"host": self.workflow.get_scratch_dir_base(),
-                                                                 "container": self.workflow.get_scratch_dir_base()})
-       
-        result = self.docker_client.exec_command(command)
-        if result['code']:
-            raise Exception(self.result["message"].rstrip())
-        return result['output']
+        if self.volume is not None:
+            volumes[self.volume] = {"bind": self.volume, "mode": "rw"}
+
+        try:
+            container = self.docker_client2.containers.run(
+                self.image, detach=True, stdin_open=True, volumes=volumes)
+            self.workflow.logger.info(
+                "%s: Container created with %s", self.name, container.id)
+            return container
+        except Exception as e:
+            raise Exception(str(e))
+
+    def get_running_container(self):
+        try:
+            container = self.docker_client2.containers.get(self.container_id)
+            return container
+        except Exception as e:
+            raise Exception(str(e))
 
     def remove_container(self):
         """
@@ -142,7 +151,7 @@ class DockerTask(Batch):
         """
         self.container.stop()
         if self.remove:
-            self.container.rm()
+            self.container.remove()
 
     def on_execute(self, script, script_name):
         """

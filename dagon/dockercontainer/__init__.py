@@ -1,5 +1,6 @@
 #from fabric.api import local, settings, hide
 from subprocess import Popen, PIPE, STDOUT
+import docker
 
 class DockerClient(object):
     """
@@ -105,7 +106,7 @@ class DockerRemoteClient(DockerClient):
         return result
 
 
-class Container(object):
+class Container(docker.client.containers.Container):
 
     """
     **Represents a docker container**

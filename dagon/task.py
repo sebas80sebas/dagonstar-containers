@@ -502,7 +502,6 @@ class Task(Thread):
 
         result = self.on_execute(context_script, "context.sh")  # execute context script
 
-
         if result['code']:
             raise Exception(result['message'])
         self.set_info(loads(result['output']))
