@@ -225,7 +225,7 @@ class DockerRemoteTask(RemoteTask, DockerTask):
                             remove=remove, globusendpoint=globusendpoint)
         RemoteTask.__init__(self, name=name, ssh_username=ssh_username, keypath=keypath, command=command, ip=ip,
                             working_dir=working_dir, globusendpoint=globusendpoint)
-        self.docker_client = DockerRemoteClient(self.ssh_connection)
+        self.docker_client2 = docker.DockerClient(base_url=f"ssh://{ssh_username}@{ip}")
 
     def on_execute(self, launcher_script, script_name):
         """
