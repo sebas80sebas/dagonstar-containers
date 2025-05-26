@@ -1047,7 +1047,7 @@ class Task(Thread):
         :return: Context script
         :rtype: str
         """
-        return """
+        return r"""
 # Initialize
 machine_type="none"
 public_id="none"
