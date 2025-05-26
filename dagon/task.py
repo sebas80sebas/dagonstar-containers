@@ -150,7 +150,7 @@ class Task(Thread):
 
     def get_endpoint(self):
         return self.globusendpoint
-    
+
     def set_endpoint(self, globusendpoint):
         self.globusendpoint = globusendpoint
 
@@ -196,7 +196,7 @@ class Task(Thread):
         :rtype: str
         """
         from dagon.remote import CloudTask
-       
+
         if isinstance(self, CloudTask):
             return self.info["public_ip"]
         else:
@@ -278,7 +278,7 @@ class Task(Thread):
         :type  DAG_tps: :class:`dagon.dag_tps`
         """
         self.dag_tps = DAG_tps
-        
+
     def exists_dir(self, path):
         pass
 
@@ -294,7 +294,8 @@ class Task(Thread):
         if self.workflow is not None:
             self.workflow.logger.debug("%s: %s", self.name, self.status)
             if self.workflow.is_api_available:
-                self.workflow.api.update_task_status(self.workflow.workflow_id, self.name, status.name)
+                self.workflow.api.update_task_status(
+                    self.workflow.workflow_id, self.name, status.name)
 
     def execute_command(self, command):
         """"
@@ -314,7 +315,8 @@ class Task(Thread):
         self.prevs.append(task)
 
         if self.workflow.is_api_available:  # add in the server
-            self.workflow.api.add_dependency(self.workflow.workflow_id, self.name, task.name)
+            self.workflow.api.add_dependency(
+                self.workflow.workflow_id, self.name, task.name)
 
     def add_transversal_point(self, task):
         """
@@ -326,7 +328,8 @@ class Task(Thread):
         self.prevs.append(task)
 
         if self.workflow.is_api_available:  # add in the server
-            self.workflow.api.add_dependency(self.workflow.workflow_id, self.name, task.name)
+            self.workflow.api.add_dependency(
+                self.workflow.workflow_id, self.name, task.name)
 
     # Increment the reference count
     def increment_reference_count(self):
@@ -352,11 +355,11 @@ class Task(Thread):
         self.working_dir = self.working_dir + "-removed"
 
         # Update the checkpoint
-        self.workflow.checkpoints[self.workflow.name + "." + self.getName()]["working_dir"] = self.working_dir
-
-
+        self.workflow.checkpoints[self.workflow.name + "." +
+                                  self.getName()]["working_dir"] = self.working_dir
 
     # Decrement the reference count
+
     def decrement_reference_count(self):
         """
         Decrement the reference count. When the number of references is equals to zero, the garbage collector is called
@@ -370,9 +373,9 @@ class Task(Thread):
 
             if self.workflow.checkpoint_file is not None:
                 fp = open(self.workflow.checkpoint_file, 'w')
-                fp.write(dumps(self.workflow.checkpoints, sort_keys=True, indent=4))
+                fp.write(dumps(self.workflow.checkpoints,
+                         sort_keys=True, indent=4))
                 fp.close()
-
 
     def set_semaphore(self, sem):
         self.semaphore = sem
@@ -423,7 +426,7 @@ class Task(Thread):
 
             # The task name is the first element
             task_name = elements[1]
-            
+
             # Set the default workflow name if needed
             if workflow_name is None or workflow_name == "":
                 workflow_name = self.workflow.name
@@ -431,7 +434,8 @@ class Task(Thread):
             # Extract the reference task object
 
             if self.workflows is None:
-                task = self.workflow.find_task_by_name(workflow_name, task_name)
+                task = self.workflow.find_task_by_name(
+                    workflow_name, task_name)
             else:
                 for wf in self.workflows:
                     task = wf.find_task_by_name(workflow_name, task_name)
@@ -460,11 +464,12 @@ class Task(Thread):
                 """
 
             if task is None:  # if is None means that task is from another WF maybe in the dagon service
-                #self.workflow.logger.debug("Adding transversal point")
-                #self.workflow.logger.debug(workflow_name)
-                #self.workflow.logger.debug(task)
+                # self.workflow.logger.debug("Adding transversal point")
+                # self.workflow.logger.debug(workflow_name)
+                # self.workflow.logger.debug(task)
                 if self.workflow.is_api_available:
-                    workflow_id = self.workflow.api.get_workflow_by_name(workflow_name)
+                    workflow_id = self.workflow.api.get_workflow_by_name(
+                        workflow_name)
                     transversal_task = self.workflow.api.get_task(workflow_id, task_name)[
                         'task']  # get the task from the external workflow
                     transversal_task = DagonTask(TaskType[transversal_task['type'].upper()], transversal_task['name'],
@@ -489,7 +494,8 @@ class Task(Thread):
         :return: command preprocessed
         :rtype: str
         """
-        stager = dagon.Stager(self.data_mover, self.stager_mover, self.workflow.cfg)
+        stager = dagon.Stager(
+            self.data_mover, self.stager_mover, self.workflow.cfg)
 
         # Initialize the script
         header = "#! /bin/bash\n"
@@ -500,21 +506,20 @@ class Task(Thread):
         context_script = header + "cd " + self.working_dir + "/.dagon\n"
         context_script += header + self.get_how_im_script() + "\n\n"
 
-        result = self.on_execute(context_script, "context.sh")  # execute context script
+        # execute context script
+        result = self.on_execute(context_script, "context.sh")
 
         if result['code']:
             raise Exception(result['message'])
         self.set_info(loads(result['output']))
 
-        
-
-        ### start the creation of the launcher.sh script
+        # start the creation of the launcher.sh script
         # Create the header
         header = header + "# Change the current directory to the working directory\n"
         header = header + "cd " + self.working_dir + "\n"
         header = header + "if [ $? -ne 0 ]; then code=1; fi \n\n"
         header = header + "# Start staging in\n\n"
-        
+
         # Create the body
         body = command
 
@@ -564,27 +569,32 @@ class Task(Thread):
             # Extract the reference task object
             # task = self.workflow.find_task_by_name(workflow_name, task_name)
             if self.workflows is None:
-                task = self.workflow.find_task_by_name(workflow_name, task_name)
+                task = self.workflow.find_task_by_name(
+                    workflow_name, task_name)
             else:
                 for wf in self.workflows:
                     task = wf.find_task_by_name(workflow_name, task_name)
-                    if task is not None: break
+                    if task is not None:
+                        break
 
             if task is None:  # if is None means that task is from another WF maybe in the dagon service
                 if self.workflow.is_api_available:
-                    workflow_id = self.workflow.api.get_workflow_by_name(workflow_name)
+                    workflow_id = self.workflow.api.get_workflow_by_name(
+                        workflow_name)
                     response = self.workflow.api.get_task(workflow_id,
                                                           task_name)  # get the task from the external workflow
                     transversal_task = response['task']
                     host_ip = response['host']
                     # if the host is the same in this computer, the task is in the same computer
                     if host_ip == self.workflow.ftpAtt['host']:
-                        task_path = transversal_task['working_dir']  # the same workingdir
+                        # the same workingdir
+                        task_path = transversal_task['working_dir']
                     else:
                         task_path = self.workflow.local_path + transversal_task[
                             'working_dir']  # if not, we add an extra path
                         ftp = FTP_API(host_ip)
-                        task_folder = transversal_task['working_dir'].split("/")[-1]  # the last one is the task folder
+                        task_folder = transversal_task['working_dir'].split(
+                            "/")[-1]  # the last one is the task folder
                         ftp.downloadFiles(task_folder, task_path)
                         # we need to download the data from the ftp host
 
@@ -599,55 +609,59 @@ class Task(Thread):
 
                 # Create the destination directory
                 header = header + "\n\n# Create the destination directory\n"
-                header = header + "mkdir -p " + dst_path + "/" + path.dirname(local_path) + "\n"
+                header = header + "mkdir -p " + dst_path + \
+                    "/" + path.dirname(local_path) + "\n"
                 header = header + "if [ $? -ne 0 ]; then code=1; fi\n\n"
                 # Add the move data command
-                header = header + stager.stage_in(self, task, dst_path, local_path)
+                header = header + \
+                    stager.stage_in(self, task, dst_path, local_path)
 
                 if self.mode == "parallel":
-                    files = glob.glob(task.get_scratch_dir() + "/" + local_path)
+                    files = glob.glob(
+                        task.get_scratch_dir() + "/" + local_path)
                     taskType = TaskType[type(self).__name__.upper()]
 
                     for file in files:
                         filename, _ = path.splitext(path.basename(file))
                         taskParallelName = "{}_{}".format(self.name, filename)
-                        cmd = body.replace(dagon.Workflow.SCHEMA + arg, " workflow:///" + self.name + "/" + path.basename(file))
+                        cmd = body.replace(
+                            dagon.Workflow.SCHEMA + arg, " workflow:///" + self.name + "/" + path.basename(file))
 
                         if type(self) == dagon.batch.Batch:
-                            parallel_task = DagonTask(taskType, taskParallelName, cmd, 
+                            parallel_task = DagonTask(taskType, taskParallelName, cmd,
                                                       transversal_workflow=self.transversal_workflow)
-                        
+
                         if type(self) == dagon.batch.RemoteBatch:
-                            parallel_task = DagonTask(taskType, taskParallelName, cmd, ssh_username=self.ssh_username, 
+                            parallel_task = DagonTask(taskType, taskParallelName, cmd, ssh_username=self.ssh_username,
                                                       keypath=self.keypath, ip=self.ip)
 
                         elif type(self) == dagon.batch.Slurm:
-                            parallel_task = DagonTask(taskType, taskParallelName, cmd, partition=self.partition, 
+                            parallel_task = DagonTask(taskType, taskParallelName, cmd, partition=self.partition,
                                                       ntasks=self.ntasks, memory=self.memory)
 
                         elif type(self) == dagon.batch.RemoteSlurm:
-                            parallel_task = DagonTask(taskType, taskParallelName, cmd, partition=self.partition, 
+                            parallel_task = DagonTask(taskType, taskParallelName, cmd, partition=self.partition,
                                                       ntasks=self.ntasks, memory=self.memory,
                                                       ssh_username=self.ssh_username, keypath=self.keypath, ip=self.ip)
 
                         elif type(self) == dagon.remote.CloudTask:
-                            parallel_task = DagonTask(taskType, taskParallelName, cmd, provider=self.provider, 
-                                                      ssh_username=self.ssh_username, key_options=self.key_options, 
-                                                      instance_id=self.instance_id, instance_flavour=self.instance_flavour, 
+                            parallel_task = DagonTask(taskType, taskParallelName, cmd, provider=self.provider,
+                                                      ssh_username=self.ssh_username, key_options=self.key_options,
+                                                      instance_id=self.instance_id, instance_flavour=self.instance_flavour,
                                                       instance_name=self.instance_name, stop_instance=self.stop_instance)
 
                         elif type(self) == dagon.docker_task.DockerTask:
-                            parallel_task = DagonTask(taskType, taskParallelName, cmd, image=self.image, 
-                                                      container_id=self.container_id, remove=self.remove, 
+                            parallel_task = DagonTask(taskType, taskParallelName, cmd, image=self.image,
+                                                      container_id=self.container_id, remove=self.remove,
                                                       volume=self.volume, transversal_workflow=self.transversal_workflow)
 
                         elif type(self) == dagon.docker_task.DockerRemoteTask:
-                            parallel_task = DagonTask(taskType, taskParallelName, cmd, image=self.image, 
-                                                      container_id=self.container_id, ssh_username=self.ssh_username, 
+                            parallel_task = DagonTask(taskType, taskParallelName, cmd, image=self.image,
+                                                      container_id=self.container_id, ssh_username=self.ssh_username,
                                                       keypath=self.keypath, ip=self.ip,
-                                                      remove=self.remove, volume=self.volume, 
+                                                      remove=self.remove, volume=self.volume,
                                                       transversal_workflow=self.transversal_workflow)
-                        
+
                         self.workflow.add_task(parallel_task)
                         self.new_tasks.append(parallel_task)
 
@@ -657,14 +671,15 @@ class Task(Thread):
 
                         for new_task in self.new_tasks:
                             next_task.add_dependency_to(new_task)
-                    
+
                     self.workflow.make_dependencies()
 
                     body = "echo \"Starting parallel tasks...\"\n"
                     body += "ln -sf " + dst_path + "/" + local_path + " " + self.get_scratch_dir()
                 else:
                     # Change the body of the command
-                    body = body.replace(dagon.Workflow.SCHEMA + arg, dst_path + "/" + local_path)
+                    body = body.replace(
+                        dagon.Workflow.SCHEMA + arg, dst_path + "/" + local_path)
             pos = pos2
 
         # Invoke the command
@@ -725,7 +740,7 @@ class Task(Thread):
         :param path: Path to the working directory
         :type path: str
         """
-        makedirs(path,exist_ok=True)
+        makedirs(path, exist_ok=True)
 
     def create_working_dir(self):
         """
@@ -733,19 +748,23 @@ class Task(Thread):
         """
         if self.working_dir is None:
             # Set a scratch directory as working directory
-            self.working_dir = self.workflow.get_scratch_dir_base() + "/" + self.get_scratch_name()
+            self.working_dir = self.workflow.get_scratch_dir_base() + "/" + \
+                self.get_scratch_name()
 
             # Set to remove the scratch directory
             self.remove_scratch_dir = True
 
         # Create scratch directory
         self.mkdir_working_dir(self.working_dir + "/.dagon")
-        self.workflow.logger.debug("%s: Scratch directory: %s", self.name, self.working_dir)
+        self.workflow.logger.debug(
+            "%s: Scratch directory: %s", self.name, self.working_dir)
         if self.workflow.is_api_available:  # change scratch directory on server
             try:
-                self.workflow.api.update_task(self.workflow.workflow_id, self.name, "working_dir", self.working_dir)
+                self.workflow.api.update_task(
+                    self.workflow.workflow_id, self.name, "working_dir", self.working_dir)
             except Exception as e:
-                self.workflow.logger.error("%s: Error updating scratch directory on server %s", self.name, e)
+                self.workflow.logger.error(
+                    "%s: Error updating scratch directory on server %s", self.name, e)
 
     def remove_reference_workflow(self):
         """
@@ -797,11 +816,13 @@ class Task(Thread):
             # Extract the reference task object
             # task = self.workflow.find_task_by_name(workflow_name, task_name)
             if self.workflows is None:
-                task = self.workflow.find_task_by_name(workflow_name, task_name)
+                task = self.workflow.find_task_by_name(
+                    workflow_name, task_name)
             else:
                 for wf in self.workflows:
                     task = wf.find_task_by_name(workflow_name, task_name)
-                    if task is not None: break
+                    if task is not None:
+                        break
 
             # Check if the refernced task is consistent
             if task is not None:
@@ -810,7 +831,7 @@ class Task(Thread):
 
             # Go to the next element
             pos = pos2
-    
+
         if len(self.nexts) == 0 and self.remove_scratch_dir is True:
             self.on_garbage()
 
@@ -822,15 +843,21 @@ class Task(Thread):
         :raises Exception: a problem occurred during the task  execution
         """
         key = self.workflow.name + "." + self.getName()
-        
-        if key in self.workflow.checkpoints and "code" in self.workflow.checkpoints[key] and self.workflow.checkpoints[key]["code"] == 0 and path.isdir(self.workflow.checkpoints[key]["working_dir"]): #Local checkpoint
+
+        # Local checkpoint
+        if key in self.workflow.checkpoints and "code" in self.workflow.checkpoints[key] and \
+                self.workflow.checkpoints[key]["code"] == 0 and path.isdir(self.workflow.checkpoints[key]["working_dir"]):
             self.working_dir = self.workflow.checkpoints[key]["working_dir"]
 
-            self.workflow.logger.debug("%s Already completed ---" % (self.name))
-        elif self.ssh_connection != None and  key in self.workflow.checkpoints and "code" in self.workflow.checkpoints[key] and self.workflow.checkpoints[key]["code"] == 0 and self.exists_dir(self.workflow.checkpoints[key]["working_dir"]):
+            self.workflow.logger.debug(
+                "%s Already completed ---" % (self.name))
+        elif self.ssh_connection != None and key in self.workflow.checkpoints and \
+            "code" in self.workflow.checkpoints[key] and self.workflow.checkpoints[key]["code"] == 0 and \
+                self.exists_dir(self.workflow.checkpoints[key]["working_dir"]):
             self.working_dir = self.workflow.checkpoints[key]["working_dir"]
 
-            self.workflow.logger.debug("%s Already completed ---" % (self.name))
+            self.workflow.logger.debug(
+                "%s Already completed ---" % (self.name))
         else:
             self.create_working_dir()
 
@@ -851,13 +878,15 @@ class Task(Thread):
                 # Invoke the actual executor
                 start_time = time()
                 self.result = self.on_execute(launcher_script, "launcher.sh")
-                self.workflow.logger.debug("%s Completed in %s seconds ---" % (self.name, (time() - start_time)))
+                self.workflow.logger.debug(
+                    "%s Completed in %s seconds ---" % (self.name, (time() - start_time)))
 
                 self.workflow.checkpoints[key]["code"] = self.result['code']
 
                 # Check if the execution failed
                 if self.result['code']:
-                    raise Exception('Executable raised a execption ' + self.result['message'])
+                    raise Exception(
+                        'Executable raised a execption ' + self.result['message'])
 
         self.remove_reference_workflow()
 
@@ -872,28 +901,32 @@ class Task(Thread):
 
             # Wait for each previous tasks
             for task in self.prevs:
-                if self.workflow.find_task_by_name(self.workflow.name, task.name) is None:  # if its a process from other workflow
+                # if its a process from other workflow
+                if self.workflow.find_task_by_name(self.workflow.name, task.name) is None:
                     while True:
                         if self.workflow.is_api_available and task.transversal_workflow is not None:  # when is an asynchronous execution
                             try:
                                 transversal_task = self.workflow.api.get_task(task.transversal_workflow, task.name)[
                                     'task']  # get the task from the external workflow using the api
                                 if transversal_task['status'] == dagon.Status.FINISHED.value or transversal_task[
-                                    'status'] == dagon.Status.FAILED.value:
+                                        'status'] == dagon.Status.FAILED.value:
                                     break
                                 else:
                                     sleep(1)
                             except Exception as e:
                                 task.set_status(dagon.Status.FAILED)
-                                self.workflow.logger.warning('Worflow dependence not found, Error: ' + str(e))
+                                self.workflow.logger.warning(
+                                    'Worflow dependence not found, Error: ' + str(e))
                                 break
-                        elif task.status == dagon.Status.FINISHED or task.status == dagon.Status.FAILED:  # when is used the dag_tps structure
+                        # when is used the dag_tps structure
+                        elif task.status == dagon.Status.FINISHED or task.status == dagon.Status.FAILED:
                             break
                         else:
                             sleep(.5)
                 else:
                     while True:
-                        if task.status == dagon.Status.WAITING or task.status == dagon.Status.READY:  # if this happends, the workflow is probably a meta-workflow
+                        # if this happends, the workflow is probably a meta-workflow
+                        if task.status == dagon.Status.WAITING or task.status == dagon.Status.READY:
                             sleep(.5)
                         else:
                             task.join()
@@ -925,11 +958,13 @@ class Task(Thread):
             # Start all next task
             for task in self.nexts:
                 if task.status == dagon.Status.READY:
-                    self.workflow.logger.debug("%s: Starting task: %s", self.name, task.name)
+                    self.workflow.logger.debug(
+                        "%s: Starting task: %s", self.name, task.name)
                     try:
                         task.start()
                     except:
-                        self.workflow.logger.warn("%s: Task %s already started.", self.name, task.name)
+                        self.workflow.logger.warn(
+                            "%s: Task %s already started.", self.name, task.name)
 
             # Change the status
             # self.workflow.api.update_task(self.workflow.workflow_id, self.name, "working_dir", self.working_dir)

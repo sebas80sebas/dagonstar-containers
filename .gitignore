@@ -119,3 +119,4 @@ examples/dataflow/batch/last_run.json
 examples/dataflow/batch/dataflow-demo-remote.json
 examples/dataflow/batch/last_run_remote.json
 examples/dataflow/batch/dataflow-demo-remote.json
+examples/dataflow/docker/*.json
