@@ -8,13 +8,16 @@ from dagon.task import DagonTask, TaskType
 # Check if this is the main
 if __name__ == '__main__':
     # Create the orchestration workflow
-    workflow = Workflow("DataFlow-Demo-Docker-Remote")
+    workflow = Workflow("DataFlow-Demo-Docker-Remote", checkpoint_file="last_run_remote.json")
 
     # The task a
     taskA = DagonTask(TaskType.DOCKER, "A", "mkdir output;hostname > output/f1.txt", image="ubuntu:latest", ip="148.247.202.73", ssh_username="dsanchez")
 
     # The task b
     taskB = DagonTask(TaskType.DOCKER, "B", "echo $RANDOM > f2.txt; cat workflow:///A/output/f1.txt >> f2.txt", image="ubuntu:latest", ip="148.247.202.73", ssh_username="dsanchez")
+
+    # Explicit checkpoint
+    taskCheckpoint = DagonTask(TaskType.CHECKPOINT, "Checkpoint_1", "workflow:///B/f2.txt")
 
     # The task c
     taskC = DagonTask(TaskType.DOCKER, "C", "echo $RANDOM > f2.txt; cat workflow:///A/output/f1.txt >> f2.txt", image="ubuntu:latest", ip="148.247.202.73", ssh_username="dsanchez")
@@ -25,6 +28,7 @@ if __name__ == '__main__':
     # add tasks to the workflow
     workflow.add_task(taskA)
     workflow.add_task(taskB)
+    workflow.add_task(taskCheckpoint)
     workflow.add_task(taskC)
     workflow.add_task(taskD)
 
@@ -36,4 +40,4 @@ if __name__ == '__main__':
         outfile.write(stringWorkflow)
 
     # run the workflow
-    workflow.run()
+    workflow.run("last_run_remote.json")
