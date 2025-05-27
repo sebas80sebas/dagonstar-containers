@@ -508,10 +508,17 @@ class Task(Thread):
 
         # execute context script
         result = self.on_execute(context_script, "context.sh")
-
         if result['code']:
             raise Exception(result['message'])
-        self.set_info(loads(result['output']))
+        
+        # Step 1: Unescape the backslashes
+        unescaped_output = result['output'].encode('utf-8').decode('unicode_escape')
+
+        # Optional: remove trailing newline if needed
+        unescaped_output = unescaped_output.strip()
+
+            
+        self.set_info(loads(unescaped_output))
 
         # start the creation of the launcher.sh script
         # Create the header
