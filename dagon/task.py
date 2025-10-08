@@ -684,6 +684,13 @@ class Task(Thread):
                                                     bind_paths=self.bind_paths, overlay_size=self.overlay_size,
                                                     remove=self.remove, tmp_dir=self.tmp_dir,
                                                     transversal_workflow=self.transversal_workflow)
+                            
+                        elif type(self) == dagon.apptainer_task.RemoteApptainerTask:
+                            parallel_task = DagonTask(taskType, taskParallelName, cmd, image=self.image,
+                                                    bind_paths=self.bind_paths, overlay_size=self.overlay_size,
+                                                    remove=self.remove, tmp_dir=self.tmp_dir,
+                                                    ssh_username=self.ssh_username, keypath=self.keypath, ip=self.ip,
+                                                    transversal_workflow=self.transversal_workflow)
 
                         self.workflow.add_task(parallel_task)
                         self.new_tasks.append(parallel_task)

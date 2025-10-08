@@ -25,7 +25,7 @@ export PYTHONPATH=$PWD:$PYTHONPATH
 Copy the configuration file:
 
 ```bash
-cp dagon.ini.sample examples/taskflow/dagon.ini
+cp dagon.ini.sample examples/dataflow/apptainer/dagon.ini
 ```
 
 Set up Apptainer automatically with the provided script:
@@ -50,34 +50,94 @@ Navigate to the Apptainer example and run the demo:
 
 ```bash
 cd examples/dataflow/apptainer/
-python taskflow-demo-apptainer.py
+python dataflow-demo-apptainer.py
 ```
 
 During the execution, the demo will create containers for each task, execute the commands with overlays for file sharing, and finally clean up temporary files (if you specify `remove=True`).
 
-## Configuration Options
 
-### Basic Usage
-```python
-from dagon.task import DagonTask, TaskType
+## Remote Apptainer Tasks with DagOnStar
 
-# Simple task with Docker Hub image
-task = DagonTask(TaskType.APPTAINER, "task1", 
-                 "echo Hello HPC", 
-                 image="docker://ubuntu:20.04")
+DagOnStar allows you to execute Apptainer tasks on remote servers via SSH. This is useful for distributing workloads across multiple machines or accessing HPC resources remotely.
+
+## Prerequisites
+
+Before running remote tasks, ensure the following:
+
+1. Apptainer is installed on the remote machine
+2. SSH service is enabled on the remote machine
+
+## Remote Machine Setup
+
+### Installing Apptainer
+
+On the remote machine (e.g., your Kali VM or HPC node), install and configure Apptainer:
+
+```bash
+# On the remote machine (e.g., Kali VM)
+sudo apt update
+sudo apt install -y apptainer
 ```
 
-### Advanced Configuration
-```python
-# Task with bind mounts for HPC storage
-task = DagonTask(TaskType.APPTAINER, "analysis", 
-                 "python analyze.py /data/input.csv", 
-                 image="docker://python:3.9",
-                 bind_paths=["/scratch:/scratch", "/shared:/shared"],
-                 overlay_size="1024")  # 1GB overlay
+### Configuring SSH Service
 
-# Using pre-built SIF image
-task = DagonTask(TaskType.APPTAINER, "simulation", 
-                 "./run_simulation", 
-                 image="/apps/containers/simulation.sif")
+Enable and verify SSH service:
+
+```bash
+# Enable SSH service to start on boot
+sudo systemctl enable ssh
+
+# Start SSH service
+sudo systemctl start ssh
+
+# Verify SSH is running
+sudo systemctl status ssh
+
+# Check your IP address and note it down
+ip a
 ```
+
+> [!TIP]
+> Look for the `inet` address under your network interface (usually `eth0` or `wlan0`). This is the IP you'll use in the configuration.
+
+## Configuration
+
+Before running remote examples, edit the `dagon.ini` file in your example directory and configure the SSH parameters:
+
+```ini
+[ssh]
+# SSH Configuration for Remote Tasks
+# Edit these values according to your environment
+remote_ip = 192.168.1.100    # IP address of the remote server (from 'ip a' command)
+ssh_user = your_username      # Your SSH username on the remote machine
+ssh_port = 22                 # SSH port (default 22, use 2222 if using Docker SSH)
+```
+
+### Configuration Parameters
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `remote_ip` | IP address or hostname of the remote server | `192.168.1.100`, `10.0.0.5`, or `hpc.example.com` |
+| `ssh_user` | SSH username for authentication | `kali`, `ubuntu`, `your_username` |
+| `ssh_port` | SSH port number | `22` (standard), `2222` (Docker), or custom port |
+
+## Running Remote Examples
+
+Once configured, navigate to the remote Apptainer example and run:
+
+```bash
+cd examples/dataflow/apptainer/
+python taskflow.py
+```
+
+## License
+
+[Add your license information here]
+
+## Contributing
+
+[Add contribution guidelines here]
+
+## Support
+
+[Add support information here]
