@@ -677,7 +677,13 @@ class Task(Thread):
                         elif type(self) == dagon.kubernetes_task.KubernetesTask:
                             parallel_task = DagonTask(taskType, taskParallelName, cmd, image=self.image,
                                                       namespace=self.namespace, remove=self.remove,
-                                                      transversal_workflow=self.transversal_workflow)    
+                                                      transversal_workflow=self.transversal_workflow)
+                                
+                        elif type(self) == dagon.kubernetes_task.RemoteKubernetesTask:
+                            parallel_task = DagonTask(taskType, taskParallelName, cmd, image=self.image,
+                                                    namespace=self.namespace, remove=self.remove,
+                                                    ssh_username=self.ssh_username, keypath=self.keypath, ip=self.ip,
+                                                    transversal_workflow=self.transversal_workflow)
                         
                         elif type(self) == dagon.apptainer_task.ApptainerTask:
                             parallel_task = DagonTask(taskType, taskParallelName, cmd, image=self.image,

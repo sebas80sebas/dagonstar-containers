@@ -2,12 +2,14 @@ import os
 import logging
 from dagon import Batch
 from dagon.task import Task
+from dagon.remote import RemoteTask
 from kubernetes import client, config
 from kubernetes.stream import stream
 from kubernetes.client.rest import ApiException
 import time
 import json
 import uuid
+import threading
 
 # Reduce Kubernetes logs
 logging.getLogger('kubernetes.client.rest').setLevel(logging.WARNING)
@@ -18,8 +20,17 @@ class KubernetesTask(Batch):
     Inherits from Batch to integrate with Dagon's task workflow.
     """
 
+    def __new__(cls, *args, **kwargs):
+        """
+        Factory method to create RemoteKubernetesTask if 'ip' is provided.
+        """
+        if "ip" in kwargs:
+            return super(Task, cls).__new__(RemoteKubernetesTask)
+        else:
+            return super(KubernetesTask, cls).__new__(cls)
+
     def __init__(self, name, command, image="ubuntu:20.04", namespace="default",
-                 working_dir=None, remove=True, transversal_workflow=None, cleanup_timeout=30):
+                 working_dir=None, remove=False, transversal_workflow=None, cleanup_timeout=30):
         """
         Initializes the Kubernetes task.
 
@@ -49,13 +60,15 @@ class KubernetesTask(Batch):
 
         # Assigned when the pod is created
         self.pod_name = None
-        
         # Pod information that Dagon needs for staging
         self.info = None
 
         # Single execution control
         self.executed = False
         self.execution_result = None
+        
+        # CRITICAL: Initialize data_mover (required by Dagon workflow)
+        self.data_mover = None
 
     def create_pod(self):
         """
@@ -99,7 +112,6 @@ class KubernetesTask(Batch):
             if pod.status.phase == "Running":
                 pod_ip = pod.status.pod_ip
                 print(f"Pod {self.pod_name} ready with IP: {pod_ip}")
-                
                 # Configure pod information that Dagon needs
                 self.info = {
                     'name': self.name,
@@ -143,9 +155,7 @@ class KubernetesTask(Batch):
             src_task.create_pod()
         if self.pod_name is None:
             self.create_pod()
-            
         print(f"Copying file {src_path} from {src_task.name} to {self.name}")
-        
         try:
             # Read file content in the source pod
             content = src_task.exec_in_pod(f"cat {src_path}")
@@ -194,30 +204,29 @@ class KubernetesTask(Batch):
                             )
                         )
                         print(f"Pod {pod_to_delete} forcefully deleted")
-                        
             except ApiException as e:
                 if e.status != 404:
                     print(f"Warning: Could not delete pod {pod_to_delete}: {e.reason}")
-                    # Method 3: Last resort - use kubectl if API fails
-                    try:
-                        import subprocess
-                        result = subprocess.run(
-                            ['kubectl', 'delete', 'pod', pod_to_delete, '--force', '--grace-period=0'],
-                            capture_output=True, text=True, timeout=10
-                        )
-                        if result.returncode == 0:
-                            print(f"Pod {pod_to_delete} deleted using kubectl")
-                        else:
-                            print(f"kubectl also failed for {pod_to_delete}: {result.stderr}")
-                    except Exception as kubectl_error:
-                        print(f"kubectl not available to clean up {pod_to_delete}: {kubectl_error}")
+                # Method 3: Last resort - use kubectl if API fails
+                try:
+                    import subprocess
+                    result = subprocess.run(
+                        ['kubectl', 'delete', 'pod', pod_to_delete, '--force', '--grace-period=0'],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    if result.returncode == 0:
+                        print(f"Pod {pod_to_delete} deleted using kubectl")
+                    else:
+                        print(f"kubectl also failed for {pod_to_delete}: {result.stderr}")
+                except Exception as kubectl_error:
+                    print(f"kubectl not available to clean up {pod_to_delete}: {kubectl_error}")
             except Exception as e:
                 print(f"Unexpected error deleting pod {pod_to_delete}: {e}")
             finally:
                 # Clean up references regardless of result
                 self.pod_name = None
                 self.info = None
-    
+
     def pre_process_command(self, command):
         """
         Override the preprocessing method to intercept workflow:/// URLs
@@ -226,15 +235,13 @@ class KubernetesTask(Batch):
         # Create the pod if it doesn't exist to ensure we have information available
         if self.pod_name is None:
             self.create_pod()
-        
         # Process workflow:/// manually to avoid KeyError
         if "workflow:///" in command:
             import re
-            
             # Find all workflow:/// references
             workflow_refs = re.findall(r'workflow:///([^/\s]+)/([^\s]+)', command)
-            
             for task_name, file_path in workflow_refs:
+                workflow_url = f"workflow:///{task_name}/{file_path}"  # Define ANTES del try
                 # Search for the referenced task in the workflow
                 src_task = None
                 if hasattr(self, 'workflow') and self.workflow:
@@ -242,25 +249,20 @@ class KubernetesTask(Batch):
                         if task.name == task_name:
                             src_task = task
                             break
-                
                 if src_task:
                     # Ensure the source task has its pod created
                     if not hasattr(src_task, 'pod_name') or src_task.pod_name is None:
                         src_task.create_pod()
-                    
                     # Create local temporary file to simulate expected behavior
                     local_path = f"/tmp/{task_name}_{file_path.replace('/', '_')}"
-                    
                     try:
                         # Copy file using our stage_in method
                         self.stage_in(src_task, file_path, local_path)
-                        
                         # Replace the workflow:// reference with the local path
-                        workflow_url = f"workflow:///{task_name}/{file_path}"
                         command = command.replace(workflow_url, local_path)
                     except Exception as e:
                         print(f"Error processing workflow reference {workflow_url}: {e}")
-        
+                        raise
         return command
 
     def on_execute(self, script, script_name):
@@ -308,3 +310,302 @@ class KubernetesTask(Batch):
         """
         self.remove_pod()
         super(KubernetesTask, self).on_garbage()
+
+
+class RemoteKubernetesTask(RemoteTask, KubernetesTask):
+    """
+    Represents a Kubernetes task running on a remote machine via SSH.
+    This class combines RemoteTask functionality with KubernetesTask to enable
+    pod execution on remote Kubernetes clusters.
+    """
+
+    def __init__(self, name, command, image="ubuntu:20.04", namespace="default",
+                 ip=None, ssh_username=None, keypath=None, ssh_port=22,
+                 working_dir=None, remove=False, transversal_workflow=None):
+        """
+        Initializes the remote Kubernetes task.
+        
+        :param ssh_port: SSH port (default: 22)
+        :type ssh_port: int
+        """
+        # CRITICAL: First initialize RemoteTask to establish ssh_connection
+        RemoteTask.__init__(self, name=name, ssh_username=ssh_username,
+                            keypath=keypath, command=command, ip=ip,
+                            working_dir=working_dir, ssh_port=ssh_port)
+
+        # Save the SSH port
+        self.ssh_port = ssh_port
+
+        # Then initialize KubernetesTask attributes (WITHOUT calling Task.__init__ again)
+        self.image = image
+        self.namespace = namespace
+        self.remove = remove
+
+        # Pod information
+        self.pod_name = None
+        self.info = None
+        self.executed = False
+        self.execution_result = None
+
+        # CRITICAL: Initialize the lock
+        self._lock = threading.Lock()
+
+        # CRITICAL: Define data_mover (necessary to prevent Workflow failure)
+        self.data_mover = None
+
+    def _run_kubectl_command(self, cmd_args):
+        """
+        Executes a kubectl command on the remote machine via SSH.
+        """
+        # Convert command list to string for SSH execution
+        if isinstance(cmd_args, list):
+            cmd_str = " ".join([f'"{arg}"' if ' ' in arg else arg for arg in cmd_args])
+        else:
+            cmd_str = cmd_args
+
+        try:
+            result = self.ssh_connection.execute_command(cmd_str)
+            output = result.get('output', result.get('message', ''))
+            code = result.get('code', 0)
+
+            if code != 0:
+                print(f"Command failed with code {code}: {cmd_str}")
+                print(f"Output/Error: {output}")
+                raise Exception(f"kubectl command failed: {output}")
+
+            return output
+        except Exception as e:
+            print(f"Error executing remote kubectl command: {cmd_str}")
+            print(f"Error: {e}")
+            raise
+
+    def create_pod(self):
+        """
+        Creates a pod in the remote Kubernetes cluster.
+        """
+        if self.pod_name is not None:
+            print(f"Reusing existing remote pod: {self.pod_name}")
+            return
+
+        with self._lock:
+            if self.pod_name is not None:
+                return
+
+            # Generate unique identifier
+            self.pod_name = f"{self.name.lower()}-{uuid.uuid4().hex[:8]}-{int(time.time()*1000)}"
+
+            print(f"Creating remote pod: {self.pod_name} on {self.ip}")
+
+            # Create pod manifest as JSON
+            pod_manifest = {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "metadata": {"name": self.pod_name, "labels": {"app": self.name}},
+                "spec": {
+                    "containers": [{
+                        "name": "main",
+                        "image": self.image,
+                        "command": ["/bin/bash", "-c", "sleep infinity"],
+                    }],
+                    "restartPolicy": "Never"
+                }
+            }
+
+            # Write manifest to temporary file on remote machine
+            manifest_path = f"/tmp/{self.pod_name}-manifest.json"
+            manifest_json = json.dumps(pod_manifest)
+            
+            # Escape for shell
+            escaped_json = manifest_json.replace("'", "'\"'\"'")
+            write_cmd = f"cat > {manifest_path} << 'EOF'\n{escaped_json}\nEOF"
+            self.ssh_connection.execute_command(write_cmd)
+
+            # Create pod using kubectl
+            create_cmd = f"kubectl apply -f {manifest_path} -n {self.namespace}"
+            self._run_kubectl_command(create_cmd)
+
+            # Clean up manifest file
+            self.ssh_connection.execute_command(f"rm -f {manifest_path}")
+
+            # Wait for pod to be ready
+            print(f"Waiting for remote pod {self.pod_name} to be ready...")
+            max_wait = 60
+            for _ in range(max_wait):
+                check_cmd = f"kubectl get pod {self.pod_name} -n {self.namespace} -o jsonpath='{{.status.phase}}'"
+                phase = self._run_kubectl_command(check_cmd).strip()
+                
+                if phase == "Running":
+                    # Get pod IP
+                    ip_cmd = f"kubectl get pod {self.pod_name} -n {self.namespace} -o jsonpath='{{.status.podIP}}'"
+                    pod_ip = self._run_kubectl_command(ip_cmd).strip()
+                    print(f"Remote pod {self.pod_name} ready with IP: {pod_ip}")
+                    
+                    self.info = {
+                        'name': self.name,
+                        'ip': pod_ip,
+                        'pod_name': self.pod_name,
+                        'namespace': self.namespace,
+                        'remote_ip': self.ip
+                    }
+                    break
+                elif phase == "Failed":
+                    raise Exception(f"Remote pod {self.pod_name} failed")
+                
+                time.sleep(1)
+            else:
+                raise Exception(f"Timeout waiting for pod {self.pod_name} to be ready")
+
+    def exec_in_pod(self, command):
+        """
+        Executes a command inside the remote pod.
+        """
+        if not command.startswith(("mkdir -p", "cat > /tmp")):
+            print(f"Executing in remote pod: {command}")
+
+        # Escape command for kubectl exec
+        escaped_cmd = command.replace("'", "'\"'\"'")
+        exec_cmd = f"kubectl exec {self.pod_name} -n {self.namespace} -- /bin/bash -c '{escaped_cmd}'"
+        
+        result = self._run_kubectl_command(exec_cmd)
+        return result
+
+    def stage_in(self, src_task, src_path, dst_path):
+        """
+        Copies a file from another pod to this pod on the remote cluster.
+        """
+        # Ensure both pods are created
+        if not hasattr(src_task, 'pod_name') or src_task.pod_name is None:
+            src_task.create_pod()
+        if self.pod_name is None:
+            self.create_pod()
+
+        print(f"Copying file {src_path} from {src_task.name} to {self.name}")
+        
+        try:
+            # Read file content from source pod
+            content = src_task.exec_in_pod(f"cat {src_path}")
+
+            # Create destination folder if it doesn't exist
+            dst_dir = "/".join(dst_path.split("/")[:-1])
+            if dst_dir:
+                self.exec_in_pod(f"mkdir -p {dst_dir}")
+
+            # Write content to destination using heredoc
+            escaped_content = content.replace("'", "'\"'\"'")
+            self.exec_in_pod(f"cat > {dst_path} << 'EOF'\n{escaped_content}\nEOF")
+            print(f"File copied successfully")
+        except Exception as e:
+            print(f"Error in stage_in: {e}")
+            raise
+
+    def remove_pod(self):
+        """
+        Removes the remote pod.
+        """
+        if self.remove and self.pod_name is not None:
+            pod_to_delete = self.pod_name
+            try:
+                print(f"Deleting remote pod: {pod_to_delete}")
+                delete_cmd = f"kubectl delete pod {pod_to_delete} -n {self.namespace} --grace-period=30"
+                self._run_kubectl_command(delete_cmd)
+                print(f"Remote pod {pod_to_delete} deleted")
+            except Exception as e:
+                # Try force delete
+                try:
+                    force_cmd = f"kubectl delete pod {pod_to_delete} -n {self.namespace} --force --grace-period=0"
+                    self._run_kubectl_command(force_cmd)
+                    print(f"Remote pod {pod_to_delete} forcefully deleted")
+                except Exception as force_error:
+                    print(f"Warning: Could not delete remote pod {pod_to_delete}: {force_error}")
+            finally:
+                self.pod_name = None
+                self.info = None
+
+    def pre_process_command(self, command):
+        """
+        Override the preprocessing method to intercept workflow:/// URLs
+        before Dagon tries to process them.
+        """
+        # Create the pod if it doesn't exist
+        if self.pod_name is None:
+            self.create_pod()
+        
+        # Process workflow:/// manually
+        if "workflow:///" in command:
+            import re
+            # Find all workflow:/// references
+            workflow_refs = re.findall(r'workflow:///([^/\s]+)/([^\s]+)', command)
+            
+            for task_name, file_path in workflow_refs:
+                workflow_url = f"workflow:///{task_name}/{file_path}"  # Define ANTES del try
+                
+                # Search for the referenced task
+                src_task = None
+                if hasattr(self, 'workflow') and self.workflow:
+                    for task in self.workflow.tasks:
+                        if task.name == task_name:
+                            src_task = task
+                            break
+                
+                if src_task:
+                    # Ensure the source task has its pod created
+                    if not hasattr(src_task, 'pod_name') or src_task.pod_name is None:
+                        src_task.create_pod()
+                    
+                    # Use the file path directly in the pod
+                    local_path = file_path
+                    
+                    try:
+                        # Copy file using stage_in method
+                        self.stage_in(src_task, file_path, local_path)
+                        # Replace the workflow:// reference with the local path
+                        command = command.replace(workflow_url, local_path)
+                    except Exception as e:
+                        print(f"Error processing workflow reference {workflow_url}: {e}")
+                        raise
+                else:
+                    print(f"Warning: Could not find source task '{task_name}' for {workflow_url}")
+        
+        return command
+
+    def on_execute(self, script, script_name):
+        """
+        Execute the task on the remote pod.
+        """
+        if self.executed:
+            print(f"[{self.name}] Returning previous result")
+            return self.execution_result
+
+        # Create pod if it doesn't exist
+        if self.pod_name is None:
+            self.create_pod()
+
+        # Process command to handle workflow:/// references
+        processed_command = self.pre_process_command(self.command)
+
+        # Execute command directly in pod (no script transfer needed)
+        print(f"[{self.name}] Executing command in remote pod")
+        result_output = self.exec_in_pod(processed_command).strip()
+
+        # Escape newlines and tabs
+        safe_result = result_output.replace("\n", "\\n").replace("\t", "\\t")
+
+        # Format output as JSON
+        output_json = json.dumps({"result": safe_result})
+        print(f"[{self.name}] Output:\n{output_json}")
+
+        result = {
+            'output': output_json,
+            'code': 0
+        }
+
+        self.executed = True
+        self.execution_result = result
+        return result
+
+    def on_garbage(self):
+        """
+        Call garbage collector, removing the pod on the remote cluster.
+        """
+        RemoteTask.on_garbage(self)
+        self.remove_pod()

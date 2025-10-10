@@ -17,17 +17,17 @@ if __name__ == '__main__':
     # Task B: generates random number and concatenates the result from A
     taskB = DagonTask(TaskType.KUBERNETES, "B",
                       "echo $RANDOM > f2.txt; cat workflow:///A/output/f1.txt >> f2.txt",
-                      image="python:3.9")
+                      image="ubuntu:20.04")
     
     # Task C: does the same as B (simulating another branch)
     taskC = DagonTask(TaskType.KUBERNETES, "C",
                       "echo $RANDOM > f2.txt; cat workflow:///A/output/f1.txt >> f2.txt",
-                      image="python:3.9")
+                      image="ubuntu:20.04")
     
     # Task D: combines the outputs from B and C and displays the result
     taskD = DagonTask(TaskType.KUBERNETES, "D",
                   "cat workflow:///B/f2.txt >> f3.txt; cat workflow:///C/f2.txt >> f3.txt; echo '=== Final contents of f3.txt ==='; cat f3.txt",
-                  image="centos:8")
+                  image="ubuntu:20.04")
     
     # Add tasks to the workflow
     workflow.add_task(taskA)

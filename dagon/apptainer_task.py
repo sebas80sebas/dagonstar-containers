@@ -27,7 +27,7 @@ class ApptainerTask(Batch):
             return super(ApptainerTask, cls).__new__(cls)
 
     def __init__(self, name, command, image="docker://ubuntu:20.04", 
-                 working_dir=None, remove=True, transversal_workflow=None,
+                 working_dir=None, remove=False, transversal_workflow=None,
                  bind_paths=None, overlay_size="1024", tmp_dir=None):
         """
         Initializes the Apptainer task.
@@ -365,7 +365,7 @@ class RemoteApptainerTask(RemoteTask, ApptainerTask):
 
     def __init__(self, name, command, image="docker://ubuntu:20.04", 
                  ip=None, ssh_username=None, keypath=None, ssh_port=22,
-                 working_dir=None, remove=True, transversal_workflow=None,
+                 working_dir=None, remove=False, transversal_workflow=None,
                  bind_paths=None, overlay_size="1024", tmp_dir="/tmp"):
         """
         Initializes the remote Apptainer task.
