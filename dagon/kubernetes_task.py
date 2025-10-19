@@ -176,56 +176,90 @@ class KubernetesTask(Batch):
     def remove_pod(self):
         """
         Removes the pod if `remove=True`, similar to `docker run --rm`.
-        Protects against non-existent pods.
+        Protects against non-existent pods and performs forced cleanup if needed.
         """
-        if self.remove and self.pod_name is not None:
-            pod_to_delete = self.pod_name  # Save reference before cleanup
+        if not getattr(self, "remove", False):
+            return
+
+        if not getattr(self, "pod_name", None):
+            return
+
+        pod_to_delete = self.pod_name  # Save reference before cleanup
+
+        try:
+            # Method 1: Standard deletion first
             try:
-                # Method 1: Standard deletion first
-                try:
+                self.v1.delete_namespaced_pod(
+                    name=pod_to_delete,
+                    namespace=self.namespace,
+                    body=client.V1DeleteOptions(grace_period_seconds=30)
+                )
+                print(f"Pod {pod_to_delete} deleted")
+            except ApiException as e:
+                if e.status == 404:
+                    print(f"Pod {pod_to_delete} no longer exists")
+                else:
+                    # Method 2: Force immediate deletion if standard method fails
+                    print(f"Standard deletion failed, forcing deletion of {pod_to_delete}")
                     self.v1.delete_namespaced_pod(
                         name=pod_to_delete,
                         namespace=self.namespace,
-                        body=client.V1DeleteOptions(grace_period_seconds=30)
-                    )
-                    print(f"Pod {pod_to_delete} deleted")
-                except ApiException as e:
-                    if e.status == 404:
-                        print(f"Pod {pod_to_delete} no longer exists")
-                    else:
-                        # Method 2: Force immediate deletion if standard method fails
-                        print(f"Standard deletion failed, forcing deletion of {pod_to_delete}")
-                        self.v1.delete_namespaced_pod(
-                            name=pod_to_delete,
-                            namespace=self.namespace,
-                            body=client.V1DeleteOptions(
-                                grace_period_seconds=0,
-                                propagation_policy='Background'
-                            )
+                        body=client.V1DeleteOptions(
+                            grace_period_seconds=0,
+                            propagation_policy='Background'
                         )
-                        print(f"Pod {pod_to_delete} forcefully deleted")
-            except ApiException as e:
-                if e.status != 404:
-                    print(f"Warning: Could not delete pod {pod_to_delete}: {e.reason}")
-                # Method 3: Last resort - use kubectl if API fails
-                try:
-                    import subprocess
-                    result = subprocess.run(
-                        ['kubectl', 'delete', 'pod', pod_to_delete, '--force', '--grace-period=0'],
-                        capture_output=True, text=True, timeout=10
                     )
-                    if result.returncode == 0:
-                        print(f"Pod {pod_to_delete} deleted using kubectl")
-                    else:
-                        print(f"kubectl also failed for {pod_to_delete}: {result.stderr}")
-                except Exception as kubectl_error:
-                    print(f"kubectl not available to clean up {pod_to_delete}: {kubectl_error}")
-            except Exception as e:
-                print(f"Unexpected error deleting pod {pod_to_delete}: {e}")
-            finally:
-                # Clean up references regardless of result
-                self.pod_name = None
-                self.info = None
+                    print(f"Pod {pod_to_delete} forcefully deleted")
+
+        except ApiException as e:
+            # Method 3: Last resort if API call fails entirely
+            if e.status != 404:
+                print(f"Warning: Could not delete pod {pod_to_delete}: {e.reason}")
+            try:
+                import subprocess
+                result = subprocess.run(
+                    [
+                        "kubectl", "delete", "pod", pod_to_delete,
+                        "-n", self.namespace,
+                        "--force", "--grace-period=0"
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    print(f"Pod {pod_to_delete} deleted using kubectl")
+                else:
+                    print(f"kubectl also failed for {pod_to_delete}: {result.stderr}")
+            except Exception as kubectl_error:
+                print(f"kubectl not available to clean up {pod_to_delete}: {kubectl_error}")
+
+        except Exception as e:
+            # Catch-all fallback for unexpected exceptions
+            print(f"Unexpected error deleting pod {pod_to_delete}: {e}")
+            try:
+                import subprocess
+                result = subprocess.run(
+                    [
+                        "kubectl", "delete", "pod", pod_to_delete,
+                        "-n", self.namespace,
+                        "--force", "--grace-period=0"
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    print(f"Pod {pod_to_delete} deleted using kubectl")
+                else:
+                    print(f"kubectl also failed for {pod_to_delete}: {result.stderr}")
+            except Exception as kubectl_error:
+                print(f"kubectl not available to clean up {pod_to_delete}: {kubectl_error}")
+
+        finally:
+            # Clean up references regardless of result
+            self.pod_name = None
+            self.info = None
 
     def pre_process_command(self, command):
         """

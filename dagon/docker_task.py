@@ -104,7 +104,7 @@ class DockerTask(Batch):
             self.docker_client2.images.pull(image)  # Pull the Docker image
             self.workflow.logger.info(
                 "%s: Successfully pulled %s", self.name, image)
-        except docker.errors.APIError as e:
+        except Exception as e:
             self.workflow.logger.error(f"An error occurred: {e}")
 
         # return self.docker_client.pull_image(image)
