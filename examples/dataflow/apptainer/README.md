@@ -303,6 +303,7 @@ On the remote machine (e.g., your Kali VM or HPC node), install and configure Ap
 ```bash
 # On the remote machine (e.g., Kali VM or HPC node)
 sudo apt update
+sudo apt upgrade -y
 sudo apt install -y apptainer
 
 # Verify installation
