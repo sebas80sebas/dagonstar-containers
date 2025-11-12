@@ -47,14 +47,14 @@ print(f"Configuration:\\n  Port: {PORT}\\n  Duration: {DURATION}s")
 
 # Check if port exists
 if not os.path.exists(PORT):
-    print(f"❌ ERROR: Port {PORT} not found")
+    print(f"ERROR: Port {PORT} not found")
     json.dump({'error': 'Port not found', 'timestamp': time.time()}, open(OUTPUT_FILE, 'w'), indent=2)
     exit(1)
 
 try:
     # Initialize serial connection
     ser = serial.Serial(PORT, BAUDRATE, timeout=2)
-    print(f"✅ Port {PORT} opened successfully\\n")
+    print(f"Port {PORT} opened successfully\\n")
     data, start = [], time.time()
 
     # Main capture loop
@@ -75,10 +75,10 @@ try:
 except Exception as e:
     # Handle errors
     json.dump({'error': str(e), 'timestamp': time.time()}, open(OUTPUT_FILE, 'w'), indent=2)
-    print(f"❌ ERROR: {e}")
+    print(f"ERROR: {e}")
     exit(1)
 
-print("✅ Capture completed successfully")
+print("Capture completed successfully")
 EOF
 
 # --- Save results ---
@@ -116,7 +116,7 @@ workflow.add_task(taskA)
 # --- Save workflow configuration ---
 with open('dht_sensor_workflow.json', 'w') as f:
     json.dump(workflow.as_json(), f, indent=2)
-print("✅ Workflow saved: dht_sensor_workflow.json")
+print("Workflow saved: dht_sensor_workflow.json")
 
 # --- Setup logging and execution ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)-8s %(message)s')
@@ -135,7 +135,7 @@ print("="*60 + "\n")
 workflow.run()
 
 print("\n🏁 Workflow completed successfully")
-print("✅ Results saved in /home/raspi/")
-print("📥 You can check them using:")
-print(f"   ssh {RASPI_USER}@{RASPI_IP} 'cat /home/raspi/sensor_output_*.json'")
+print("Results saved in /home/raspi/")
+print("You can check them using:")
+print(f"ssh {RASPI_USER}@{RASPI_IP} 'cat /home/raspi/sensor_output_*.json'")
 print("="*60 + "\n")
