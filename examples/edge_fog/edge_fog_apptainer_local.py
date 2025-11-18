@@ -30,7 +30,7 @@ echo "Date: $(date)"
 echo "=========================================="
 
 # --- Install pyserial ---
-echo "📦 Installing pyserial..."
+echo "Installing pyserial..."
 pip install --no-cache-dir pyserial >/dev/null 2>&1
 
 # --- Inline Python script ---
@@ -61,7 +61,7 @@ try:
     while time.time() - start < DURATION:
         line = ser.readline().decode('utf-8', errors='ignore').strip()
         if not line: continue
-        print(f"📥 {line}")
+        print(f" {line}")
         # Extract temperature and humidity values
         m = re.search(r'Humidity:\\s*([\\d.]+).*Temperature:\\s*([\\d.]+)', line)
         if m:
@@ -70,7 +70,7 @@ try:
     # Close connection and save data
     ser.close()
     json.dump(data, open(OUTPUT_FILE, 'w'), indent=2)
-    print(f"💾 Data saved to {OUTPUT_FILE} ({len(data)} records)")
+    print(f" Data saved to {OUTPUT_FILE} ({len(data)} records)")
 
 except Exception as e:
     # Handle errors
@@ -122,13 +122,13 @@ print("Workflow saved: dht_sensor_workflow.json")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)-8s %(message)s')
 
 print("\n" + "="*60)
-print("🚀 Starting DHT Sensor Capture with Dagon")
+print("Starting DHT Sensor Capture with Dagon")
 print("="*60)
-print(f"📍 Raspberry Pi: {RASPI_IP}")
-print(f"🔌 Device: /dev/ttyACM0 (Arduino)")
-print(f"⏱️  Duration: 30 seconds")
-print(f"📝 Log: /home/raspi/dagon_capture_*.log")
-print(f"💾 Output: /home/raspi/sensor_output_*.json")
+print(f"Raspberry Pi: {RASPI_IP}")
+print(f"Device: /dev/ttyACM0 (Arduino)")
+print(f"Duration: 30 seconds")
+print(f"Log: /home/raspi/dagon_capture_*.log")
+print(f"Output: /home/raspi/sensor_output_*.json")
 print("="*60 + "\n")
 
 # Execute workflow
