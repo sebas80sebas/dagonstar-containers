@@ -3,7 +3,7 @@ set -e
 echo "[Apptainer] Installing..."
 # Detect and install according to the system
 if command -v apptainer &> /dev/null || command -v singularity &> /dev/null; then
-    echo "[Apptainer] Already installed ✅"
+    echo "[Apptainer] Already installed"
 elif [ -f /etc/debian_version ]; then
     sudo apt update && sudo apt install -y software-properties-common
     sudo add-apt-repository -y ppa:apptainer/ppa && sudo apt update
@@ -33,5 +33,5 @@ export APPTAINER_TMPDIR=$HOME/.apptainer/tmp
 export APPTAINER_CMD=$APPTAINER_CMD
 # Install Python dependencies
 pip install --quiet spython psutil filelock tqdm
-echo "[Apptainer] Installation completed ✅"
+echo "[Apptainer] Installation completed"
 echo "Available command: $APPTAINER_CMD"

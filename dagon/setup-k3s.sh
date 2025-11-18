@@ -9,4 +9,4 @@ sudo chown $(id -u):$(id -g) ~/.kube/config
 # Export for current session
 export KUBECONFIG=$HOME/.kube/config
 echo "export KUBECONFIG=$HOME/.kube/config" >> ~/.bashrc
-echo "[K3s] Installation completed ✅"
+echo "[K3s] Installation completed"
