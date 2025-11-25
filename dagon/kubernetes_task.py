@@ -463,7 +463,7 @@ class RemoteKubernetesTask(RemoteTask, KubernetesTask):
 
             # Wait for pod to be ready
             print(f"Waiting for remote pod {self.pod_name} to be ready...")
-            max_wait = 60
+            max_wait = 300
             for _ in range(max_wait):
                 check_cmd = f"kubectl get pod {self.pod_name} -n {self.namespace} -o jsonpath='{{.status.phase}}'"
                 phase = self._run_kubectl_command(check_cmd).strip()
