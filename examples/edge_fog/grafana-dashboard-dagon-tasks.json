@@ -58,7 +58,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": 0,
   "links": [],
   "panels": [
     {
@@ -166,7 +165,7 @@
           "refId": "A"
         }
       ],
-      "title": "🔋 Potencia Raspberry Pi (PMIC - Hardware Real)",
+      "title": "Potencia Raspberry Pi (PMIC - Hardware Real)",
       "type": "timeseries"
     },
     {
@@ -274,7 +273,7 @@
           "refId": "A"
         }
       ],
-      "title": "🖥️ Potencia PC (Scaphandre - Hardware Real)",
+      "title": "Potencia PC (Scaphandre - Hardware Real)",
       "type": "timeseries"
     },
     {
@@ -384,7 +383,117 @@
           "refId": "A"
         }
       ],
-      "title": "💻 CPU Raspberry Pi (Node Exporter Real)",
+      "title": "CPU Raspberry Pi (Node Exporter Real)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Uso de CPU en PC durante ejecución de tasks",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "CPU %",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{job=\"node-pc\",mode=\"idle\"}[30s])) * 100)",
+          "legendFormat": "PC CPU Usage",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "CPU PC (Node Exporter Real)",
       "type": "timeseries"
     },
     {
@@ -459,8 +568,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 8
+        "x": 0,
+        "y": 16
       },
       "id": 4,
       "options": {
@@ -494,7 +603,7 @@
           "refId": "A"
         }
       ],
-      "title": "🧠 RAM Raspberry Pi (Node Exporter Real)",
+      "title": "RAM Raspberry Pi (Node Exporter Real)",
       "type": "timeseries"
     },
     {
@@ -502,7 +611,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Duración de cada task del workflow Dagon",
+      "description": "Uso de memoria RAM en PC",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -512,21 +621,21 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Seconds",
+            "axisLabel": "RAM %",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
-            "drawStyle": "bars",
-            "fillOpacity": 80,
-            "gradientMode": "none",
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -543,115 +652,26 @@
             }
           },
           "mappings": [],
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": 0
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 16
-      },
-      "id": 5,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "dagon_task_duration_seconds{workflow=\"DHT-Sensor-Capture-And-Preprocess\"}",
-          "legendFormat": "Task {{task}} Duration",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "⏱️ Duración Tasks Dagon (Exacta)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Volumen de trabajo: registros procesados por cada task",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "Records",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 30,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "stepAfter",
-            "lineWidth": 2,
-            "pointSize": 6,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "always",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+              },
               {
-                "color": "green",
-                "value": 0
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
               }
             ]
           },
-          "unit": "short"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -661,13 +681,13 @@
         "x": 12,
         "y": 16
       },
-      "id": 6,
+      "id": 11,
       "options": {
         "legend": {
           "calcs": [
+            "mean",
             "lastNotNull",
-            "max",
-            "min"
+            "max"
           ],
           "displayMode": "table",
           "placement": "bottom",
@@ -687,13 +707,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "dagon_task_records_total{workflow=\"DHT-Sensor-Capture-And-Preprocess\"}",
-          "legendFormat": "Task {{task}} Records",
+          "expr": "100 * (1 - ((node_memory_MemAvailable_bytes{job=\"node-pc\"} or node_memory_Buffers_bytes{job=\"node-pc\"} + node_memory_Cached_bytes{job=\"node-pc\"} + node_memory_MemFree_bytes{job=\"node-pc\"}) / node_memory_MemTotal_bytes{job=\"node-pc\"}))",
+          "legendFormat": "PC RAM Usage",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "📊 Volumen de Trabajo - Records Procesados (Exacto)",
+      "title": "RAM PC (Node Exporter Real)",
       "type": "timeseries"
     },
     {
@@ -701,7 +721,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Panel de correlación: muestra todas las métricas juntas para análisis energético",
+      "description": "Temperatura de la Raspberry Pi durante ejecución",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -711,13 +731,13 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "°C",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
+            "fillOpacity": 30,
+            "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
@@ -748,72 +768,28 @@
               {
                 "color": "green",
                 "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 75
               }
             ]
-          }
+          },
+          "unit": "celsius"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/Power.*/"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "watt"
-              },
-              {
-                "id": "custom.axisPlacement",
-                "value": "left"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/CPU.*/"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "max",
-                "value": 100
-              },
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/Task.*/"
-            },
-            "properties": [
-              {
-                "id": "custom.lineWidth",
-                "value": 3
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 0
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 24,
+        "h": 8,
+        "w": 12,
         "x": 0,
         "y": 24
       },
-      "id": 7,
+      "id": 12,
       "options": {
         "legend": {
           "calcs": [
@@ -822,9 +798,8 @@
             "max"
           ],
           "displayMode": "table",
-          "placement": "right",
-          "showLegend": true,
-          "width": 300
+          "placement": "bottom",
+          "showLegend": true
         },
         "tooltip": {
           "hideZeros": false,
@@ -840,37 +815,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rpi_pmic_power_watts",
-          "legendFormat": "🔋 RasPi Power (W)",
+          "expr": "node_hwmon_temp_celsius{job=\"node-rpi\"}",
+          "legendFormat": "Raspberry Pi Temperature",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "scaph_host_power_watts",
-          "hide": false,
-          "legendFormat": "🖥️ PC Power (W)",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{job=\"node-rpi\",mode=\"idle\"}[30s])) * 100)",
-          "hide": false,
-          "legendFormat": "💻 RasPi CPU %",
-          "range": true,
-          "refId": "C"
         }
       ],
-      "title": "🔬 CORRELACIÓN ENERGÉTICA: Potencia vs CPU",
+      "title": "Temperatura Raspberry Pi",
       "type": "timeseries"
     },
     {
@@ -878,92 +829,45 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Estado actual de las tasks",
+      "description": "Temperatura del PC durante ejecución",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "red",
-                  "index": 1,
-                  "text": "Failed"
-                },
-                "1": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "Success"
-                }
-              },
-              "type": "value"
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "°C",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
             }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 0,
-        "y": 34
-      },
-      "id": 8,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "horizontal",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "value_and_name",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "dagon_task_success{workflow=\"DHT-Sensor-Capture-And-Preprocess\"}",
-          "legendFormat": "Task {{task}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "✅ Task Status",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Resumen de energía consumida (integración aproximada)",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
           },
           "mappings": [],
           "thresholds": {
@@ -975,41 +879,41 @@
               },
               {
                 "color": "yellow",
-                "value": 50
+                "value": 70
               },
               {
                 "color": "red",
-                "value": 100
+                "value": 85
               }
             ]
           },
-          "unit": "watt"
+          "unit": "celsius"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
+        "h": 8,
         "w": 12,
         "x": 12,
-        "y": 34
+        "y": 24
       },
-      "id": 9,
+      "id": 13,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
+        "legend": {
           "calcs": [
-            "mean"
+            "mean",
+            "lastNotNull",
+            "max"
           ],
-          "fields": "",
-          "values": false
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
         },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
       },
       "pluginVersion": "12.3.1",
       "targets": [
@@ -1019,26 +923,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "avg_over_time(rpi_pmic_power_watts[5m])",
-          "legendFormat": "RasPi Avg Power",
+          "expr": "node_hwmon_temp_celsius{job=\"node-pc\"}",
+          "legendFormat": "PC Temperature",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "avg_over_time(scaph_host_power_watts[5m])",
-          "hide": false,
-          "legendFormat": "PC Avg Power",
-          "range": true,
-          "refId": "B"
         }
       ],
-      "title": "⚡ Potencia Promedio (últimos 5min)",
-      "type": "stat"
+      "title": "Temperatura PC",
+      "type": "timeseries"
     }
   ],
   "preload": false,
@@ -1054,12 +946,12 @@
     "list": []
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Dagon Energy Analysis - Hardware Correlation",
-  "uid": "dagon-energy-analysis",
-  "version": 12
+  "title": "Dagon Metrics Analysis",
+  "uid": "dagon-metrics-analysis",
+  "version": 2
 }
