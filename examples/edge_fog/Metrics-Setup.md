@@ -739,6 +739,25 @@ If you need to automate dashboard creation or access Grafana programmatically:
 
 **Your token:** `123...` (replace with actual token when generated)
 
+### Importing the Dagon Tasks Dashboard on the PC
+
+Once Prometheus is configured as a data source in Grafana, you can import the prepared dashboard to visualize Raspberry Pi, PC, and Dagon workflow metrics.
+
+1. Copy the file `grafana-dashboard-dagon-tasks.json` to the PC where Grafana is installed (for example to your home directory or `/tmp`).  
+2. Open Grafana at `http://localhost:3000` in your browser and log in with your credentials.  
+3. In the left sidebar, click on the **Dashboards** icon, then select **New → Import**.  
+4. On the Import page, click **Upload JSON file** and select the `grafana-dashboard-dagon-tasks.json` file.  
+5. In the **Folder** field, choose where you want to store the dashboard (for example, “General”).  
+6. In the **Prometheus** data source field, select the data source that points to `http://localhost:9090`. The dashboard JSON is configured to use a Prometheus data source, so make sure you select the correct one.  
+7. Click **Import**.
+
+After importing, the dashboard will include panels such as:
+
+- Raspberry Pi power consumption from the PMIC exporter (for example, `rpi_pmic_power_watts`).  
+- PC power consumption from Scaphandre (for example, `scaph_host_power_microwatts / 1000000`).  
+- CPU and RAM usage for both Raspberry Pi and PC using Node Exporter metrics (for example, `node_cpu_seconds_total` and `node_memory_*`).  
+- Workflow start and end events as annotations (for example, `dagon_workflow_start` and `dagon_workflow_end`).
+
 ---
 
 ## Summary of the Complete Setup
