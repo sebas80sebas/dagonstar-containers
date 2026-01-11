@@ -355,7 +355,7 @@ echo "==========================================" >> "$LOG_FILE"
 python3 << 'PYEOF' >> "$LOG_FILE" 2>&1
 import json, re, time, os
 from pymongo import MongoClient
-from datetime import datetime
+from datetime import datetime, timezone
 
 with open('/home/raspi/.dagon_metrics/current_execution_id') as f:
     execution_id = f.read().strip()
