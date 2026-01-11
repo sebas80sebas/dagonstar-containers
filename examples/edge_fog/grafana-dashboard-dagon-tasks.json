@@ -65,7 +65,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Potencia consumida por la Raspberry Pi medida por PMIC (hardware real)",
+      "description": "Power consumption of the Raspberry Pi measured by PMIC",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -165,7 +165,7 @@
           "refId": "A"
         }
       ],
-      "title": "Potencia Raspberry Pi (PMIC - Hardware Real)",
+      "title": "Raspberry Pi Power (PMIC)",
       "type": "timeseries"
     },
     {
@@ -173,7 +173,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Potencia consumida por el PC medida por Scaphandre via RAPL",
+      "description": "Power consumption of the PC measured by Scaphandre via RAPL",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -273,7 +273,7 @@
           "refId": "A"
         }
       ],
-      "title": "Potencia PC (Scaphandre - Hardware Real)",
+      "title": "PC Power (Scaphandre RAPL)",
       "type": "timeseries"
     },
     {
@@ -281,7 +281,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Uso de CPU en Raspberry Pi durante ejecución de tasks",
+      "description": "CPU usage on Raspberry Pi during task execution",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -383,7 +383,7 @@
           "refId": "A"
         }
       ],
-      "title": "CPU Raspberry Pi (Node Exporter Real)",
+      "title": "CPU Raspberry Pi (Node Exporter)",
       "type": "timeseries"
     },
     {
@@ -391,7 +391,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Uso de CPU en PC durante ejecución de tasks",
+      "description": "CPU usage on PC during task execution",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -493,7 +493,7 @@
           "refId": "A"
         }
       ],
-      "title": "CPU PC (Node Exporter Real)",
+      "title": "CPU PC (Node Exporter)",
       "type": "timeseries"
     },
     {
@@ -501,7 +501,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Uso de memoria RAM en Raspberry Pi",
+      "description": "RAM usage on Raspberry Pi",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -603,7 +603,7 @@
           "refId": "A"
         }
       ],
-      "title": "RAM Raspberry Pi (Node Exporter Real)",
+      "title": "RAM Raspberry Pi (Node Exporter)",
       "type": "timeseries"
     },
     {
@@ -611,7 +611,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Uso de memoria RAM en PC",
+      "description": "RAM usage on PC",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -713,7 +713,7 @@
           "refId": "A"
         }
       ],
-      "title": "RAM PC (Node Exporter Real)",
+      "title": "RAM PC (Node Exporter)",
       "type": "timeseries"
     },
     {
@@ -721,7 +721,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Temperatura de la Raspberry Pi durante ejecución",
+      "description": "Raspberry Pi temperature during execution",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -821,7 +821,7 @@
           "refId": "A"
         }
       ],
-      "title": "Temperatura Raspberry Pi",
+      "title": "Raspberry Pi Temperature",
       "type": "timeseries"
     },
     {
@@ -829,7 +829,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Temperatura del PC durante ejecución",
+      "description": "PC temperature during execution",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -929,7 +929,7 @@
           "refId": "A"
         }
       ],
-      "title": "Temperatura PC",
+      "title": "PC Temperature",
       "type": "timeseries"
     }
   ],
