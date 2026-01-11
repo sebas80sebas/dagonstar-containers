@@ -75,7 +75,7 @@ import serial, re, json, time, os
 
 PORT = '/dev/ttyACM0'
 BAUDRATE = 9600
-DURATION = 30
+DURATION = 300
 OUTPUT_FILE = 'output.json'
 
 print(f"Configuration:\\n  Port: {{PORT}}\\n  Duration: {{DURATION}}s")
