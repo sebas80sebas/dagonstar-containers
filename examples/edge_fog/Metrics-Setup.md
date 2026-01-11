@@ -261,6 +261,27 @@ rpi_pmic_rail_power_watts{rail="0V8_AON"} 0.0021442349742000003
 rpi_pmic_rail_power_watts{rail="HDMI"} 0.07983316070400001
 ```
 
+
+### Modify SIF image to include dependencies for the container tasks
+
+#### On the RasPi, create a definition file:
+```bash
+cat > ~/python_dht.def << 'EOF'
+Bootstrap: docker
+From: python:3.9-slim
+
+%post
+    # Pre-install all dependencies
+    pip install --no-cache-dir pyserial pandas pymongo
+
+%runscript
+    exec "$@"
+EOF
+```
+#### Build the new image:
+```bash
+sudo apptainer build python_dht.sif python_dht.def
+```
 ---
 
 ## PC (Fog Node)

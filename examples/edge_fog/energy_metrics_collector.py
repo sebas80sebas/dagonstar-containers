@@ -6,7 +6,7 @@ Captures CPU, RAM, and energy metrics from Prometheus during workflow execution
 
 import requests
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 import threading
 import json
 from typing import Dict, List, Optional
@@ -41,7 +41,6 @@ class PrometheusMetricsCollector:
             if response.status_code == 200:
                 data = response.json()
                 if data['status'] == 'success' and data['data']['result']:
-                    # Return first value
                     return float(data['data']['result'][0]['value'][1])
             return None
         except Exception as e:
@@ -58,19 +57,16 @@ class PrometheusMetricsCollector:
         }
         
         # === RASPBERRY PI METRICS ===
-        # Power (PMIC - real hardware)
         rpi_power = self.query_prometheus('rpi_pmic_power_watts')
         if rpi_power:
             metrics['rpi_power_watts'] = rpi_power
         
-        # CPU usage
         rpi_cpu = self.query_prometheus(
             '100 - (avg by (instance) (rate(node_cpu_seconds_total{job="node-rpi",mode="idle"}[30s])) * 100)'
         )
         if rpi_cpu:
             metrics['rpi_cpu_percent'] = rpi_cpu
         
-        # RAM usage
         rpi_ram = self.query_prometheus(
             '100 * (1 - ((node_memory_MemAvailable_bytes{job="node-rpi"} or '
             'node_memory_Buffers_bytes{job="node-rpi"} + node_memory_Cached_bytes{job="node-rpi"} + '
@@ -79,25 +75,21 @@ class PrometheusMetricsCollector:
         if rpi_ram:
             metrics['rpi_ram_percent'] = rpi_ram
         
-        # Temperature
         rpi_temp = self.query_prometheus('node_hwmon_temp_celsius{job="node-rpi"}')
         if rpi_temp:
             metrics['rpi_temp_celsius'] = rpi_temp
         
         # === PC METRICS ===
-        # Power (Scaphandre - real hardware)
         pc_power = self.query_prometheus('scaph_host_power_microwatts / 1000000')
         if pc_power:
             metrics['pc_power_watts'] = pc_power
         
-        # CPU usage (if you have node exporter on PC)
         pc_cpu = self.query_prometheus(
             '100 - (avg by (instance) (rate(node_cpu_seconds_total{job="node-pc",mode="idle"}[30s])) * 100)'
         )
         if pc_cpu:
             metrics['pc_cpu_percent'] = pc_cpu
         
-        # RAM usage
         pc_ram = self.query_prometheus(
             '100 * (1 - ((node_memory_MemAvailable_bytes{job="node-pc"} or '
             'node_memory_Buffers_bytes{job="node-pc"} + node_memory_Cached_bytes{job="node-pc"} + '
@@ -106,28 +98,17 @@ class PrometheusMetricsCollector:
         if pc_ram:
             metrics['pc_ram_percent'] = pc_ram
 
-        # Temperature
         pc_temp = self.query_prometheus('node_hwmon_temp_celsius{job="node-pc"}')
         if pc_temp:
             metrics['pc_temp_celsius'] = pc_temp
-
 
         return metrics
     
     def _collection_loop(self):
         """Collection loop running in separate thread"""
-        print(f"Starting metrics collection (interval: {self.sampling_interval}s)")
-        
         while self.is_collecting:
             metrics = self.collect_metrics_once()
             self.metrics_data.append(metrics)
-            
-            # Show progress
-            elapsed = time.time() - self.start_time
-            print(f"  [{elapsed:.1f}s] RasPi: {metrics.get('rpi_power_watts', 0):.2f}W, "
-                  f"CPU: {metrics.get('rpi_cpu_percent', 0):.1f}%, "
-                  f"RAM: {metrics.get('rpi_ram_percent', 0):.1f}%")
-            
             time.sleep(self.sampling_interval)
     
     def start_collection(self):
@@ -142,8 +123,6 @@ class PrometheusMetricsCollector:
         
         self.collection_thread = threading.Thread(target=self._collection_loop, daemon=True)
         self.collection_thread.start()
-        
-        print("Metrics collection started")
     
     def stop_collection(self):
         """Stops metrics collection"""
@@ -169,7 +148,6 @@ class PrometheusMetricsCollector:
             'sampling_interval_seconds': self.sampling_interval,
         }
         
-        # Calculate averages, maximums, minimums for each metric
         metric_keys = [k for k in self.metrics_data[0].keys() if k not in ['timestamp', 'datetime']]
         
         for key in metric_keys:
@@ -180,7 +158,6 @@ class PrometheusMetricsCollector:
                 stats[f'{key}_min'] = min(values)
                 stats[f'{key}_std'] = self._std_dev(values)
         
-        # Calculate total energy approximation (trapezoidal integration)
         if any('rpi_power_watts' in m for m in self.metrics_data):
             rpi_energy = self._calculate_energy('rpi_power_watts')
             stats['rpi_energy_joules'] = rpi_energy
@@ -204,7 +181,7 @@ class PrometheusMetricsCollector:
             if power_key in current and power_key in next_m:
                 dt = next_m['timestamp'] - current['timestamp']
                 avg_power = (current[power_key] + next_m[power_key]) / 2
-                energy += avg_power * dt  # Joules
+                energy += avg_power * dt
         
         return energy
     
@@ -249,7 +226,6 @@ class PrometheusMetricsCollector:
         print(f"\nDuration: {stats.get('collection_duration_seconds', 0):.2f}s")
         print(f"Samples: {stats.get('samples_count', 0)} (interval: {stats.get('sampling_interval_seconds', 0)}s)")
         
-        # Raspberry Pi
         if 'rpi_power_watts_mean' in stats:
             print(f"\nRASPBERRY PI:")
             print(f"   Power: {stats['rpi_power_watts_mean']:.3f}W "
@@ -261,7 +237,6 @@ class PrometheusMetricsCollector:
             print(f"   Total Energy: {stats.get('rpi_energy_joules', 0):.2f} J "
                   f"({stats.get('rpi_energy_wh', 0):.4f} Wh)")
         
-        # PC
         if 'pc_power_watts_mean' in stats:
             print(f"\nPC:")
             print(f"   Power: {stats['pc_power_watts_mean']:.3f}W "
@@ -281,23 +256,17 @@ class PrometheusMetricsCollector:
         print("="*70 + "\n")
 
 
-# Usage example
 if __name__ == "__main__":
-    # Create collector
     collector = PrometheusMetricsCollector(
         prometheus_url="http://localhost:9090",
-        sampling_interval=2  # every 2 seconds
+        sampling_interval=2
     )
     
-    # Simulate workflow execution
     print("Simulating 30-second workflow...")
     
     collector.start_collection()
-    time.sleep(30)  # Your workflow.run() would go here
+    time.sleep(30)
     collector.stop_collection()
     
-    # Show summary
     collector.print_summary()
-    
-    # Export to JSON
     collector.export_to_json("energy_metrics.json")

@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
 """
-Dagon DHT Workflow with energy metrics capture
+Dagon DHT Workflow with Energy Metrics Capture
 Integrates: DHT sensor + MongoDB + Prometheus energy metrics
 """
 
 import json, configparser, logging, time
 from dagon import Workflow
 from dagon.task import DagonTask, TaskType
-from datetime import datetime
+from datetime import datetime, timezone
 from pymongo import MongoClient
 import sys
 import os
 import subprocess
 
-# Import metrics collector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from energy_metrics_collector import PrometheusMetricsCollector
 
-# --- Read configuration ---
+# Read configuration
 config = configparser.ConfigParser()
 config.read('dagon.ini')
 
@@ -32,7 +31,6 @@ MONGO_COLLECTION = config.get('mongodb', 'collection')
 PROMETHEUS_URL = config.get('prometheus', 'url', fallback='http://localhost:9090')
 SAMPLING_INTERVAL = config.getint('prometheus', 'sampling_interval', fallback=2)
 
-# --- Generate execution ID ---
 EXECUTION_ID = time.strftime("%Y%m%d_%H%M%S")
 
 print("="*70)
@@ -40,22 +38,19 @@ print("Dagon DHT Workflow with Energy Monitoring")
 print("="*70)
 print(f"Execution ID: {EXECUTION_ID}")
 print(f"Raspberry Pi: {RASPI_IP}")
-print(f"MongoDB: {MONGO_URI}")
+print(f"MongoDB: {MONGO_DB}.{MONGO_COLLECTION}")
 print(f"Prometheus: {PROMETHEUS_URL}")
 print(f"Sampling: every {SAMPLING_INTERVAL}s")
 print("="*70 + "\n")
 
-# --- Create workflow ---
 workflow = Workflow("DHT-Sensor-Capture-And-Preprocess")
 
 # ========== TASK A: DHT Sensor Capture ==========
 taskA_command = f"""
-# ========== Initial Setup ==========
 TASK="A"
 WORKFLOW="DHT-Sensor-Capture-And-Preprocess"
 EXECUTION_ID="{EXECUTION_ID}"
 
-# Metrics paths
 METRICS_TMP="/tmp/dagon_${{TASK}}.prom"
 METRICS_DIR="/var/lib/node_exporter/textfile_collector"
 METRICS_CURRENT="${{METRICS_DIR}}/dagon_dht_${{TASK}}_current.prom"
@@ -75,15 +70,9 @@ echo "Execution ID: ${{EXECUTION_ID}}"
 echo "Date: $(date)"
 echo "=========================================="
 
-# --- Install pyserial ---
-echo "Installing pyserial..."
-pip install --no-cache-dir pyserial >/dev/null 2>&1
-
-# --- Inline Python script ---
 python3 << 'EOF'
 import serial, re, json, time, os
 
-# Serial port configuration
 PORT = '/dev/ttyACM0'
 BAUDRATE = 9600
 DURATION = 30
@@ -91,38 +80,32 @@ OUTPUT_FILE = 'output.json'
 
 print(f"Configuration:\\n  Port: {{PORT}}\\n  Duration: {{DURATION}}s")
 
-# Check if port exists
 if not os.path.exists(PORT):
     print(f"ERROR: Port {{PORT}} not found")
     json.dump({{'error': 'Port not found', 'timestamp': time.time()}}, open(OUTPUT_FILE, 'w'), indent=2)
     exit(1)
 
 try:
-    # Initialize serial connection
     ser = serial.Serial(PORT, BAUDRATE, timeout=2)
     print(f"Port {{PORT}} opened successfully\\n")
     print("Starting DHT11 sensor reading...")
     data, start = [], time.time()
 
-    # Main capture loop
     while time.time() - start < DURATION:
         line = ser.readline().decode('utf-8', errors='ignore').strip()
         if not line:
             continue
         print(f"{{line}}")
-        # Extract temperature and humidity values
         m = re.search(r'Humidity:\\s*([\\d.]+).*Temperature:\\s*([\\d.]+)', line)
         if m:
             data.append({{'timestamp': time.time(), 'humidity': float(m[1]), 'temp_c': float(m[2])}})
 
-    # Close connection and save data
     ser.close()
     print(f"RECORDS_CAPTURED={{len(data)}}")
     json.dump(data, open(OUTPUT_FILE, 'w'), indent=2)
     print(f"Data saved to {{OUTPUT_FILE}} ({{len(data)}} records)")
 
 except Exception as e:
-    # Handle errors
     json.dump({{'error': str(e), 'timestamp': time.time()}}, open(OUTPUT_FILE, 'w'), indent=2)
     print(f"ERROR: {{e}}")
     exit(1)
@@ -130,7 +113,6 @@ except Exception as e:
 print("Capture completed successfully")
 EOF
 
-# --- Save results with execution ID ---
 DEST="/home/raspi/sensor_output_${{EXECUTION_ID}}.json"
 cp output.json "$DEST" 2>/dev/null || echo '{{"error":"output.json not created"}}' > "$DEST"
 
@@ -141,14 +123,11 @@ echo "Results saved to: $DEST"
 END_TS=$(date +%s.%N)
 DURATION=$(awk "BEGIN {{print ${{END_TS}}-${{START_TS}}}}")
 
-# Extract number of records
 RECORDS=$(grep -o "RECORDS_CAPTURED=[0-9]*" "$LOG_FILE" | tail -1 | cut -d= -f2)
 RECORDS=${{RECORDS:-0}}
 
-# Check for errors
 grep -q "ERROR" "$LOG_FILE" && SUCCESS=0
 
-# Write metrics with execution_id label (ATOMIC)
 cat <<EOF_METRICS > ${{METRICS_TMP}}
 # HELP dagon_task_duration_seconds Duration of a Dagon task
 # TYPE dagon_task_duration_seconds gauge
@@ -167,22 +146,18 @@ dagon_task_records_total{{workflow="${{WORKFLOW}}",task="${{TASK}}",execution_id
 dagon_execution_start_timestamp_seconds{{workflow="${{WORKFLOW}}",task="${{TASK}}",execution_id="${{EXECUTION_ID}}"}} ${{START_TS}}
 EOF_METRICS
 
-# 1. Save to HISTORY (never overwritten - for MongoDB export)
 mkdir -p $(dirname ${{METRICS_HISTORY}})
 cp ${{METRICS_TMP}} ${{METRICS_HISTORY}}
 echo "Metrics history saved: ${{METRICS_HISTORY}}"
 
-# 2. Save to BACKUP (overwritten - for quick access)
 mkdir -p $(dirname ${{METRICS_BACKUP}})
 cp ${{METRICS_TMP}} ${{METRICS_BACKUP}}
 echo "Metrics backup saved: ${{METRICS_BACKUP}}"
 
-# 3. Publish to Prometheus (overwritten - Prometheus scrapes periodically)
 if [ -d "${{METRICS_DIR}}" ]; then
     cp ${{METRICS_TMP}} ${{METRICS_CURRENT}} 2>/dev/null && echo "Metrics published to Prometheus: ${{METRICS_CURRENT}}" || echo "Warning: Could not publish to Prometheus"
 fi
 
-# Save EXECUTION_ID for subsequent tasks
 echo "${{EXECUTION_ID}}" > /home/raspi/.dagon_metrics/current_execution_id
 
 echo "=========================================="
@@ -192,7 +167,7 @@ taskA = DagonTask(
     TaskType.APPTAINER,
     "A",
     taskA_command,
-    image="docker://python:3.9-slim",
+    image="/home/raspi/python_dht.sif",
     ip=RASPI_IP,
     ssh_username=RASPI_USER,
     ssh_port=RASPI_PORT
@@ -208,16 +183,13 @@ taskA.extra_args = [
 workflow.add_task(taskA)
 
 
-# ========== TASK B: Remote Preprocessing ==========
+# ========== TASK B: Data Preprocessing ==========
 taskB_command = f"""
-# ========== Preprocessing Setup ==========
 TASK="B"
 WORKFLOW="DHT-Sensor-Capture-And-Preprocess"
 
-# Read execution ID from Task A
 EXECUTION_ID=$(cat /home/raspi/.dagon_metrics/current_execution_id 2>/dev/null || echo "{EXECUTION_ID}")
 
-# Metrics paths
 METRICS_TMP="/tmp/dagon_${{TASK}}.prom"
 METRICS_DIR="/var/lib/node_exporter/textfile_collector"
 METRICS_CURRENT="${{METRICS_DIR}}/dagon_dht_${{TASK}}_current.prom"
@@ -229,31 +201,22 @@ SUCCESS=1
 RECORDS=0
 
 LOG_FILE="/home/raspi/dagon_preprocess_${{EXECUTION_ID}}.log"
-exec > >(tee -a "$LOG_FILE") 2>&1
 
-echo "=========================================="
-echo "Starting preprocessing"
-echo "Execution ID: ${{EXECUTION_ID}}"
-echo "Date: $(date)"
-echo "=========================================="
+echo "==========================================" >> "$LOG_FILE"
+echo "Starting preprocessing" >> "$LOG_FILE"
+echo "Execution ID: ${{EXECUTION_ID}}" >> "$LOG_FILE"
+echo "Date: $(date)" >> "$LOG_FILE"
+echo "==========================================" >> "$LOG_FILE"
 
-# --- Install requirements ---
-echo "Installing pandas..."
-pip install --no-cache-dir pandas >/dev/null 2>&1
-
-# --- Inline Python script for preprocessing ---
-python3 << 'EOF'
+python3 << 'EOF' >> "$LOG_FILE" 2>&1
 import json, glob, os, time
 import pandas as pd
 
-# Read execution ID
 with open('/home/raspi/.dagon_metrics/current_execution_id') as f:
     execution_id = f.read().strip()
 
-# Wait a bit to ensure file is fully written
 time.sleep(2)
 
-# Search for the file from this execution
 input_file = f'/home/raspi/sensor_output_{{execution_id}}.json'
 output_file = input_file.replace('.json', '_preprocessed.json')
 
@@ -263,11 +226,9 @@ if not os.path.exists(input_file):
 
 print(f"Processing: {{input_file}}")
 
-# Read data
 with open(input_file) as f:
     data = json.load(f)
 
-# If the file contains an error dict, abort
 if isinstance(data, dict) and 'error' in data:
     print(f"ERROR in input file: {{data['error']}}")
     exit(1)
@@ -301,20 +262,21 @@ print(f"Preprocessed file saved to {{output_file}}")
 print("Preprocessing completed successfully")
 EOF
 
-echo "=========================================="
-echo "Log saved to: $LOG_FILE"
+PYTHON_EXIT=$?
+
+echo "==========================================" >> "$LOG_FILE"
+echo "Python script exit code: $PYTHON_EXIT" >> "$LOG_FILE"
+echo "Log saved to: $LOG_FILE" >> "$LOG_FILE"
 
 END_TS=$(date +%s.%N)
 DURATION=$(awk "BEGIN {{print ${{END_TS}}-${{START_TS}}}}")
 
-# Extract number of records
 RECORDS=$(grep -o "RECORDS_CAPTURED=[0-9]*" "$LOG_FILE" | tail -1 | cut -d= -f2)
 RECORDS=${{RECORDS:-0}}
 
-# Check for errors
 grep -q "ERROR" "$LOG_FILE" && SUCCESS=0
+[ $PYTHON_EXIT -ne 0 ] && SUCCESS=0
 
-# Write metrics with execution_id label (ATOMIC)
 cat <<EOF_METRICS > ${{METRICS_TMP}}
 # HELP dagon_task_duration_seconds Duration of a Dagon task
 # TYPE dagon_task_duration_seconds gauge
@@ -333,29 +295,28 @@ dagon_task_records_total{{workflow="${{WORKFLOW}}",task="${{TASK}}",execution_id
 dagon_execution_start_timestamp_seconds{{workflow="${{WORKFLOW}}",task="${{TASK}}",execution_id="${{EXECUTION_ID}}"}} ${{START_TS}}
 EOF_METRICS
 
-# 1. Save to HISTORY (never overwritten)
 mkdir -p $(dirname ${{METRICS_HISTORY}})
 cp ${{METRICS_TMP}} ${{METRICS_HISTORY}}
-echo "Metrics history saved: ${{METRICS_HISTORY}}"
+echo "Metrics history saved: ${{METRICS_HISTORY}}" >> "$LOG_FILE"
 
-# 2. Save to BACKUP (overwritten)
 mkdir -p $(dirname ${{METRICS_BACKUP}})
 cp ${{METRICS_TMP}} ${{METRICS_BACKUP}}
-echo "Metrics backup saved: ${{METRICS_BACKUP}}"
+echo "Metrics backup saved: ${{METRICS_BACKUP}}" >> "$LOG_FILE"
 
-# 3. Publish to Prometheus (overwritten)
 if [ -d "${{METRICS_DIR}}" ]; then
-    cp ${{METRICS_TMP}} ${{METRICS_CURRENT}} 2>/dev/null && echo "Metrics published to Prometheus: ${{METRICS_CURRENT}}" || echo "Warning: Could not publish to Prometheus"
+    cp ${{METRICS_TMP}} ${{METRICS_CURRENT}} 2>/dev/null && echo "Metrics published to Prometheus: ${{METRICS_CURRENT}}" >> "$LOG_FILE" || echo "Warning: Could not publish to Prometheus" >> "$LOG_FILE"
 fi
 
-echo "=========================================="
+echo "==========================================" >> "$LOG_FILE"
+
+exit $PYTHON_EXIT
 """
 
 taskB = DagonTask(
     TaskType.APPTAINER,
     "B",
     taskB_command,
-    image="docker://python:3.9-slim",
+    image="/home/raspi/python_dht.sif",
     ip=RASPI_IP,
     ssh_username=RASPI_USER,
     ssh_port=RASPI_PORT
@@ -374,41 +335,31 @@ taskB.add_dependency_to(taskA)
 
 # ========== TASK C: Export to MongoDB ==========
 taskC_command = f"""
-# ========== MongoDB Export Setup ==========
 TASK="C"
 WORKFLOW="DHT-Sensor-Capture-And-Preprocess"
 
-# Read execution ID
 EXECUTION_ID=$(cat /home/raspi/.dagon_metrics/current_execution_id 2>/dev/null || echo "{EXECUTION_ID}")
 
 START_TS=$(date +%s.%N)
 SUCCESS=1
 
 LOG_FILE="/home/raspi/dagon_mongodb_export_${{EXECUTION_ID}}.log"
-exec > >(tee -a "$LOG_FILE") 2>&1
 
-echo "=========================================="
-echo "Starting MongoDB export"
-echo "Execution ID: ${{EXECUTION_ID}}"
-echo "Date: $(date)"
-echo "MongoDB: {MONGO_URI}"
-echo "=========================================="
+echo "==========================================" >> "$LOG_FILE"
+echo "Starting MongoDB export" >> "$LOG_FILE"
+echo "Execution ID: ${{EXECUTION_ID}}" >> "$LOG_FILE"
+echo "Date: $(date)" >> "$LOG_FILE"
+echo "MongoDB: {MONGO_URI}" >> "$LOG_FILE"
+echo "==========================================" >> "$LOG_FILE"
 
-# --- Install pymongo ---
-echo "Installing pymongo..."
-pip install --no-cache-dir pymongo >/dev/null 2>&1
-
-# --- Inline Python script for MongoDB export ---
-python3 << 'PYEOF'
+python3 << 'PYEOF' >> "$LOG_FILE" 2>&1
 import json, re, time, os
 from pymongo import MongoClient
 from datetime import datetime
 
-# Read execution ID
 with open('/home/raspi/.dagon_metrics/current_execution_id') as f:
     execution_id = f.read().strip()
 
-# MongoDB configuration (from host)
 MONGO_URI = "{MONGO_URI}"
 MONGO_DB = "{MONGO_DB}"
 MONGO_COLLECTION = "{MONGO_COLLECTION}"
@@ -418,21 +369,17 @@ print(f"Execution ID: {{execution_id}}")
 print(f"Connecting to MongoDB: {{MONGO_URI}}")
 
 try:
-    # Connect to MongoDB (REMOTE)
     client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=10000)
     db = client[MONGO_DB]
     collection = db[MONGO_COLLECTION]
     
-    # Test connection
     client.server_info()
     print("MongoDB connection successful")
     
-    # Check if this execution already exists
     if collection.find_one({{"execution_id": execution_id}}):
         print(f"Warning: Execution {{execution_id}} already exported to MongoDB")
         exit(0)
     
-    # Find preprocessed file for this execution
     preprocessed_file = f'/home/raspi/sensor_output_{{execution_id}}_preprocessed.json'
     
     if not os.path.exists(preprocessed_file):
@@ -444,7 +391,6 @@ try:
     with open(preprocessed_file) as f:
         data = json.load(f)
     
-    # Parse metrics from HISTORY files
     def parse_prometheus_metrics(metric_file):
         metrics = {{}}
         try:
@@ -452,7 +398,6 @@ try:
                 for line in f:
                     if line.startswith('#') or not line.strip():
                         continue
-                    # Extract metric name and value
                     match = re.search(r'(\\w+)\\{{.*task="(\\w+)".*\\}}\\s+([\\d.]+)', line)
                     if match:
                         metric_name, task, value = match.groups()
@@ -462,20 +407,17 @@ try:
             print(f"Warning: Could not read metrics from {{metric_file}}: {{e}}")
         return metrics
     
-    # Read metrics from history files
     metrics = {{}}
     for task in ['A', 'B']:
         metric_file = f'/home/raspi/.dagon_metrics/history/dagon_dht_{{task}}_{{execution_id}}.prom'
         metrics.update(parse_prometheus_metrics(metric_file))
     
-    # Calculate total duration
     total_duration = metrics.get('task_A_task_duration', 0) + metrics.get('task_B_task_duration', 0)
     
-    # Build document to insert
     document = {{
         "execution_id": execution_id,
         "workflow": "DHT-Sensor-Capture-And-Preprocess",
-        "export_timestamp": datetime.utcnow(),
+        "export_timestamp": datetime.now(timezone.utc),
         "raspberry_pi": RASPI_IP,
         "summary": data.get("summary", {{}}),
         "metrics": metrics,
@@ -488,7 +430,6 @@ try:
         )
     }}
     
-    # Insert into MongoDB
     result = collection.insert_one(document)
     print(f"Document inserted with ID: {{result.inserted_id}}")
     print(f"  Records: {{data['summary']['count']}}")
@@ -496,7 +437,6 @@ try:
     print(f"  Mean humidity: {{data['summary']['mean_humidity']:.2f}}%")
     print(f"  Total duration: {{total_duration:.2f}}s")
     
-    # Show collection stats
     total_docs = collection.count_documents({{}})
     print(f"\\nTotal executions in MongoDB: {{total_docs}}")
     
@@ -512,16 +452,21 @@ finally:
 
 PYEOF
 
-echo "=========================================="
-echo "Log saved to: $LOG_FILE"
-echo "=========================================="
+PYTHON_EXIT=$?
+
+echo "==========================================" >> "$LOG_FILE"
+echo "Python script exit code: $PYTHON_EXIT" >> "$LOG_FILE"
+echo "Log saved to: $LOG_FILE" >> "$LOG_FILE"
+echo "==========================================" >> "$LOG_FILE"
+
+exit $PYTHON_EXIT
 """
 
 taskC = DagonTask(
     TaskType.APPTAINER,
     "C",
     taskC_command,
-    image="docker://python:3.9-slim",
+    image="/home/raspi/python_dht.sif",
     ip=RASPI_IP,
     ssh_username=RASPI_USER,
     ssh_port=RASPI_PORT
@@ -546,7 +491,6 @@ def write_workflow_event(metric_name, workflow_name, execution_id):
     tmp_file = f"/tmp/{metric_name}.prom"
     final_file = f"{metrics_dir}/{metric_name}.prom"
     
-    # Use current timestamp in milliseconds
     timestamp = int(time.time() * 1000)
     
     metric = f"""# HELP {metric_name} Dagon workflow event
@@ -555,7 +499,6 @@ def write_workflow_event(metric_name, workflow_name, execution_id):
 """
     
     try:
-        # Build SSH command to write metric on Raspberry Pi
         ssh_cmd = [
             'ssh',
             '-p', str(RASPI_PORT),
@@ -572,11 +515,8 @@ def write_workflow_event(metric_name, workflow_name, execution_id):
         
         if result.returncode == 0:
             print(f"Workflow event published: {metric_name}")
-            print(f"  Timestamp: {timestamp}")
         else:
             print(f"Warning: Could not write workflow event {metric_name}")
-            if result.stderr:
-                print(f"  Error: {result.stderr}")
             
     except subprocess.TimeoutExpired:
         print(f"Timeout writing workflow event {metric_name}")
@@ -584,24 +524,20 @@ def write_workflow_event(metric_name, workflow_name, execution_id):
         print(f"Could not write workflow event {metric_name}: {e}")
 
 
-# --- Configure logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)-8s %(message)s')
 
-# ========== INTEGRATION WITH ENERGY MONITORING ==========
+# ========== ENERGY MONITORING ==========
 
-# 1. Create metrics collector
 energy_collector = PrometheusMetricsCollector(
     prometheus_url=PROMETHEUS_URL,
     sampling_interval=SAMPLING_INTERVAL
 )
 
-print("Starting energy monitoring...")
+print("Starting energy monitoring...\n")
 energy_collector.start_collection()
 
-# 2. Execute workflow
-print(f"\nExecuting workflow (Tasks A, B, C)...\n")
+print(f"Executing workflow (Tasks A, B, C)...\n")
 
-# ===== WORKFLOW START EVENT =====
 write_workflow_event(
     metric_name="dagon_workflow_start",
     workflow_name=workflow.name,
@@ -617,7 +553,6 @@ except Exception as e:
     print(f"Error in workflow: {e}")
     workflow_success = False
 
-# ===== WORKFLOW END EVENT =====
 write_workflow_event(
     metric_name="dagon_workflow_end",
     workflow_name=workflow.name,
@@ -627,19 +562,16 @@ write_workflow_event(
 workflow_end = time.time()
 workflow_duration = workflow_end - workflow_start
 
-# 3. Stop metrics collection
 print(f"\nStopping energy monitoring...")
 energy_collector.stop_collection()
 
-# 4. Get statistics
 energy_stats = energy_collector.calculate_statistics()
 energy_collector.print_summary()
 
-# 5. Export metrics to local file
 energy_filename = f"energy_metrics_{EXECUTION_ID}.json"
 energy_collector.export_to_json(energy_filename)
 
-# ========== EXPORT EVERYTHING TO MONGODB ==========
+# ========== EXPORT TO MONGODB ==========
 print("\n" + "="*70)
 print("Adding energy metrics to MongoDB...")
 print("="*70)
@@ -649,17 +581,14 @@ try:
     db = client[MONGO_DB]
     collection = db[MONGO_COLLECTION]
     
-    # Verify connection
     client.server_info()
     print("Connected to MongoDB")
     
-    # Find the document that Task C inserted
     workflow_doc = collection.find_one({"execution_id": EXECUTION_ID})
     
     if workflow_doc:
         print(f"Found workflow document")
         
-        # Add energy metrics to document
         update_data = {
             "$set": {
                 "energy_monitoring": {
@@ -669,7 +598,6 @@ try:
                     "collection_duration_seconds": energy_stats.get('collection_duration_seconds', 0),
                     "samples_count": energy_stats.get('samples_count', 0),
                     
-                    # Raspberry Pi metrics
                     "raspberry_pi": {
                         "power": {
                             "mean_watts": energy_stats.get('rpi_power_watts_mean', 0),
@@ -695,7 +623,6 @@ try:
                         }
                     },
                     
-                    # PC metrics (if they exist)
                     "pc": {
                         "power": {
                             "mean_watts": energy_stats.get('pc_power_watts_mean', 0),
@@ -722,12 +649,10 @@ try:
                     } if 'pc_power_watts_mean' in energy_stats else {},
                 },
                 
-                # Add update timestamp
-                "energy_metrics_added_at": datetime.utcnow()
+                "energy_metrics_added_at": datetime.now(timezone.utc)
             }
         }
         
-        # Update document
         result = collection.update_one(
             {"execution_id": EXECUTION_ID},
             update_data
@@ -758,5 +683,4 @@ if 'pc_energy_wh' in energy_stats:
     print(f"PC Energy: {energy_stats.get('pc_energy_wh', 0):.4f} Wh")
 print(f"\nLocal metrics: {energy_filename}")
 print(f"MongoDB: {MONGO_DB}.{MONGO_COLLECTION}")
-print(f"Analyze: python3 energy_analysis_tools.py summary 1")
 print("="*70 + "\n")
