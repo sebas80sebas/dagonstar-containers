@@ -128,7 +128,6 @@ class DockerTask(Batch):
 
         # return self.docker_client.pull_image(image)
 
-    # Create a Docker container
     def create_container(self):
         """
         Creates the container where the task will be executed
@@ -139,29 +138,35 @@ class DockerTask(Batch):
         :raises Exception: a problem occurred while container creation
         """
 
-        self.pull_image(self.image)  # pull image
+        self.pull_image(self.image)
 
-        volumes = {
-            self.workflow.get_scratch_dir_base(): {"bind": self.workflow.get_scratch_dir_base(), "mode": "rw"},
-        }
+        volumes = {}
+        
+        # Añadir scratch directory base normalizado
+        scratch_base = self.workflow.get_scratch_dir_base().rstrip('/')
+        volumes[scratch_base] = {"bind": scratch_base, "mode": "rw"}
 
         if self.volume is not None:
             # Parse volume string (format: host_path:container_path or just host_path)
             if ':' in self.volume:
-                # Format: host_path:container_path
                 host_path, container_path = self.volume.split(':', 1)
-                volumes[host_path] = {"bind": container_path, "mode": "rw"}
+                host_path = host_path.rstrip('/')
+                container_path = container_path.rstrip('/')
+                
+                if host_path not in volumes:
+                    volumes[host_path] = {"bind": container_path, "mode": "rw"}
             else:
-                # Format: just host_path (mount to same path in container)
-                volumes[self.volume] = {"bind": self.volume, "mode": "rw"}
+                normalized_volume = self.volume.rstrip('/')
+                if normalized_volume not in volumes:
+                    volumes[normalized_volume] = {"bind": normalized_volume, "mode": "rw"}
 
         try:
             container = self.docker_client2.containers.run(
                 self.image, detach=True, stdin_open=True, volumes=volumes)
-            self.workflow.logger.info(
-                "%s: Container created with %s", self.name, container.id)
+            self.workflow.logger.info("%s: Container created with %s", self.name, container.id)
             return container
         except Exception as e:
+            self.workflow.logger.error("%s: Failed to create container.", self.name)
             raise Exception(str(e))
 
     def get_running_container(self):
