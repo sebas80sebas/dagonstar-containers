@@ -65,13 +65,24 @@ class SSHManager:
         :type filepath: str
 
         :param content: content of the file
-        :type filepath: str
+        :type content: str
         """
-
-        sftp = self.get_connection().open_sftp()
-        f = sftp.open(filepath, 'w')
-        f.write(content)
-        f.close()
+        import os
+        import shlex
+        
+        # Create the directory using SSH command
+        directory = os.path.dirname(filepath)
+        if directory:
+            self.execute_command(f"mkdir -p {directory}")
+        
+        # Write the file using SSH and heredoc (avoiding SFTP completely)
+        # This is more reliable than SFTP for script files
+        command = f"cat > {shlex.quote(filepath)} << 'DAGON_EOF'\n{content}\nDAGON_EOF"
+        
+        result = self.execute_command(command)
+        
+        if result['code'] != 0:
+            raise IOError(f"Failed to create file {filepath}: {result.get('message', 'Unknown error')}")
 
     def get_ssh_connection(self):
         """

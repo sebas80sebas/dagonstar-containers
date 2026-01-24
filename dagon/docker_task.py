@@ -46,7 +46,10 @@ class DockerTask(Batch):
         self.remove = remove
         self.image = image
         self.volume = volume
-        self.docker_client2 = docker.from_env()
+        try:
+            self.docker_client2 = docker.from_env()
+        except Exception:
+            self.docker_client2 = None
 
         # self.docker_client = DockerClient()
 
@@ -66,10 +69,26 @@ class DockerTask(Batch):
         :return: Script body with the command
         :rtype: string
         """
-
-        body = super(DockerTask, self).include_command(body)
-        body = "cd " + self.working_dir + ";" + body
-        command = "docker exec -t " + self.container.id + " sh -c \"" + body.strip() + "\" \n"
+        
+        cd_command = f"cd {self.working_dir} && "
+        container_command = cd_command + body.strip()
+        
+        # Crear un script temporal para evitar problemas con heredocs anidados
+        temp_script = f"{self.working_dir}/.dagon/container_script.sh"
+        
+        # Paso 1: Crear el script en el host usando cat con un delimitador único
+        command = f"cat > {temp_script} << 'END_OF_CONTAINER_SCRIPT'\n"
+        command += f"#!/bin/bash\n"
+        command += f"{container_command}\n"
+        command += "END_OF_CONTAINER_SCRIPT\n"
+        
+        # Paso 2: Dar permisos de ejecución
+        command += f"chmod +x {temp_script}\n"
+        
+        # Paso 3: Copiar el script al contenedor y ejecutarlo
+        command += f"docker cp {temp_script} {self.container.id}:/tmp/task_script.sh\n"
+        command += f"docker exec -i {self.container.id} bash /tmp/task_script.sh | tee {self.working_dir}/.dagon/stdout.txt\n"
+        
         return command
 
     def pre_process_command(self, command):
@@ -127,7 +146,14 @@ class DockerTask(Batch):
         }
 
         if self.volume is not None:
-            volumes[self.volume] = {"bind": self.volume, "mode": "rw"}
+            # Parse volume string (format: host_path:container_path or just host_path)
+            if ':' in self.volume:
+                # Format: host_path:container_path
+                host_path, container_path = self.volume.split(':', 1)
+                volumes[host_path] = {"bind": container_path, "mode": "rw"}
+            else:
+                # Format: just host_path (mount to same path in container)
+                volumes[self.volume] = {"bind": self.volume, "mode": "rw"}
 
         try:
             container = self.docker_client2.containers.run(
@@ -191,7 +217,7 @@ class DockerRemoteTask(RemoteTask, DockerTask):
     """
 
     def __init__(self, name, command, image=None, container_id=None, ip=None, ssh_username=None, keypath=None,
-                 working_dir=None, remove=True, globusendpoint=None):
+                 working_dir=None, remove=True, globusendpoint=None, volume=None):  # AÑADE volume
         """
         :param name: task name
         :type name: str
@@ -219,13 +245,16 @@ class DockerRemoteTask(RemoteTask, DockerTask):
 
         :param keypath: Path to the public key
         :type keypath: str
+        
+        :param volume: Volume to mount in the container (host_path:container_path)
+        :type volume: str
         """
 
         DockerTask.__init__(self, name, command, container_id=container_id, working_dir=working_dir, image=image,
-                            remove=remove, globusendpoint=globusendpoint)
+                            remove=remove, globusendpoint=globusendpoint, volume=volume)  # AÑADE volume
         RemoteTask.__init__(self, name=name, ssh_username=ssh_username, keypath=keypath, command=command, ip=ip,
                             working_dir=working_dir, globusendpoint=globusendpoint)
-        self.docker_client2 = docker.DockerClient(base_url=f"ssh://{ssh_username}@{ip}")
+        self.docker_client2 = docker.DockerClient(base_url=f"ssh://{ssh_username}@{ip}", timeout=300)
 
     def on_execute(self, launcher_script, script_name):
         """

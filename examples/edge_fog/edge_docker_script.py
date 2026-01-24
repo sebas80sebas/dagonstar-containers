@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Edge-Only Processing Workflow with Dagon using Kubernetes (K3S)
+Edge-Only Processing Workflow with Dagon using Docker
 Performs file generation and compression entirely on the Edge node (Raspberry Pi)
 Task A: Generate 10 random files with different sizes (1KB, 1MB, 10MB)
-Task B: Read and compress the generated files on the SAME Raspberry Pi via Kubernetes
+Task B: Read and compress the generated files on the SAME Raspberry Pi via Docker
 """
 
 import json, configparser, logging, time, sys
@@ -14,33 +14,40 @@ from dagon.task import DagonTask, TaskType
 config = configparser.ConfigParser()
 config.read('dagon.ini')
 
-# We use the same configuration keys as edge_apptainer_script.py
+# Configuration from dagon.ini
 RASPI_IP = config.get('ssh', 'raspi_ip')
 RASPI_USER = config.get('ssh', 'raspi_user')
-RASPI_PORT = config.getint('ssh', 'raspi_port')
+# Use raspi_port if available, otherwise default to 22
+try:
+    RASPI_PORT = config.getint('ssh', 'raspi_port')
+except (configparser.NoOptionError, ValueError):
+    RASPI_PORT = 22
 
 EXECUTION_ID = time.strftime("%Y%m%d_%H%M%S")
 
 print("="*70)
-print("EDGE-ONLY Kubernetes Workflow - Performance Test")
+print("EDGE-ONLY Docker Workflow - Performance Test")
 print("="*70)
 print(f"Execution ID: {EXECUTION_ID}")
 print(f"Edge Node: {RASPI_IP}")
 print(f"Total files: 10 (mixed sizes: 1KB, 1MB, 10MB)")
-print(f"Architecture: ALL processing on Kubernetes (Edge node)")
+print(f"Architecture: ALL processing on Docker (Edge node)")
 print("="*70 + "\n")
 
 # Create workflow
-workflow = Workflow("Edge-Only-K8s-File-Processing")
+workflow = Workflow("Edge-Only-Docker-File-Processing")
+
+# IMPORTANTE: Usar directorio con espacio suficiente (como en Apptainer)
+WORK_DIR = f"/home/{RASPI_USER}/docker_scratch_{EXECUTION_ID}"
 
 # ========== TASK A: File Generation (Writing Phase) ==========
 taskA_command = f"""
 TASK="A"
-WORKFLOW="Edge-Only-K8s-File-Processing"
+WORKFLOW="Edge-Only-Docker-File-Processing"
 EXECUTION_ID="{EXECUTION_ID}"
 
 NUM_FILES=10
-OUTPUT_DIR="generated_files"
+OUTPUT_DIR="/home/{RASPI_USER}/edge_only_files_${{EXECUTION_ID}}"
 SIZES=(1024 1048576 10485760)
 SIZE_NAMES=("1KB" "1MB" "10MB")
 
@@ -48,14 +55,14 @@ START_TS=$(date +%s.%N)
 SUCCESS=1
 FILES_GENERATED=0
 
-LOG_FILE="taskA_${{EXECUTION_ID}}.log"
+LOG_FILE="/home/{RASPI_USER}/edge_only_taskA_${{EXECUTION_ID}}.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "=========================================="
-echo "Starting Task A: File Generation (K8S)"
+echo "Starting Task A: File Generation (Docker)"
 echo "Execution ID: ${{EXECUTION_ID}}"
 echo "Date: $(date)"
-echo "Node: Kubernetes Pod on Edge"
+echo "Node: Docker Container on Edge"
 echo "=========================================="
 
 # Create output directory
@@ -91,21 +98,21 @@ echo ""
 echo "=========================================="
 echo "Task A completed in ${{DURATION}} seconds"
 echo "Files generated: ${{FILES_GENERATED}}/${{NUM_FILES}}"
-echo "Log saved to pod: $LOG_FILE"
+echo "Log saved to: $LOG_FILE"
 echo "=========================================="
 
 # Save metrics
-METRICS_FILE="taskA_metrics_${{EXECUTION_ID}}.json"
+METRICS_FILE="/home/{RASPI_USER}/edge_only_taskA_metrics_${{EXECUTION_ID}}.json"
 cat > "${{METRICS_FILE}}" << EOF
 {{
   "task": "A",
-  "workflow": "${{WORKFLOW}}",
+  "workflow": "Edge-Only-Docker-File-Processing",
   "execution_id": "${{EXECUTION_ID}}",
   "duration_seconds": ${{DURATION}},
   "success": ${{SUCCESS}},
   "files_generated": ${{FILES_GENERATED}},
   "output_directory": "${{OUTPUT_DIR}}",
-  "node": "edge-k8s"
+  "node": "edge-docker"
 }}
 EOF
 
@@ -113,53 +120,47 @@ echo "Metrics saved to: ${{METRICS_FILE}}"
 """
 
 taskA = DagonTask(
-    TaskType.KUBERNETES,
+    TaskType.DOCKER,
     "A",
     taskA_command,
-    image="bash:5",
+    image="ubuntu:22.04",
     ip=RASPI_IP,
     ssh_username=RASPI_USER,
-    ssh_port=RASPI_PORT
+    working_dir=f"/home/{RASPI_USER}/docker_scratch_{EXECUTION_ID}/taskA",
+    volume=f"/home/{RASPI_USER}:/home/{RASPI_USER}"
 )
 
 workflow.add_task(taskA)
 
 
 # ========== TASK B: File Compression (Reading Phase) ==========
-# We use workflow:///A/generated_files to get the directory from Task A
 taskB_command = f"""
 TASK="B"
-WORKFLOW="Edge-Only-K8s-File-Processing"
+WORKFLOW="Edge-Only-Docker-File-Processing"
 EXECUTION_ID="{EXECUTION_ID}"
 
-SRC_DIR="workflow:///A/generated_files"
 NUM_FILES=10
-INPUT_DIR="input_files"
-OUTPUT_DIR="compressed_files"
+INPUT_DIR="/home/{RASPI_USER}/edge_only_files_${{EXECUTION_ID}}"
+OUTPUT_DIR="/home/{RASPI_USER}/edge_only_compressed_${{EXECUTION_ID}}"
 SIZE_NAMES=("1KB" "1MB" "10MB")
 
 START_TS=$(date +%s.%N)
 SUCCESS=1
 FILES_COMPRESSED=0
 
-LOG_FILE="taskB_${{EXECUTION_ID}}.log"
+LOG_FILE="/home/{RASPI_USER}/edge_only_taskB_${{EXECUTION_ID}}.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "=========================================="
-echo "Starting Task B: File Compression (K8S)"
+echo "Starting Task B: File Compression (Docker)"
 echo "Execution ID: ${{EXECUTION_ID}}"
 echo "Date: $(date)"
-echo "Node: Kubernetes Pod on Edge"
+echo "Node: Docker Container on Edge"
 echo "=========================================="
 
-# Prepare input directory by copying from Task A's output
-echo "Fetching files from Task A..."
-mkdir -p "${{INPUT_DIR}}"
-cp -rv ${{SRC_DIR}}/* "${{INPUT_DIR}}/"
-
-# Check if input directory is empty
-if [ -z "$(ls -A ${{INPUT_DIR}})" ]; then
-    echo "ERROR: No files found in ${{INPUT_DIR}}"
+# Check if input directory exists
+if [ ! -d "${{INPUT_DIR}}" ]; then
+    echo "ERROR: Input directory not found: ${{INPUT_DIR}}"
     SUCCESS=0
     exit 1
 fi
@@ -169,13 +170,7 @@ mkdir -p "${{OUTPUT_DIR}}"
 echo "Output directory created: ${{OUTPUT_DIR}}"
 echo ""
 
-# Check if gzip is available
-if ! command -v gzip &> /dev/null; then
-    echo "Installing gzip..."
-    apt-get update && apt-get install -y gzip
-fi
-
-echo "Running compression on Kubernetes pod..."
+echo "Running compression on Docker container..."
 echo ""
 
 for i in $(seq 1 $NUM_FILES); do
@@ -219,22 +214,22 @@ echo ""
 echo "=========================================="
 echo "Task B completed in ${{DURATION}} seconds"
 echo "Files compressed: ${{FILES_COMPRESSED}}/${{NUM_FILES}}"
-echo "Log saved to pod: $LOG_FILE"
+echo "Log saved to: $LOG_FILE"
 echo "=========================================="
 
 # Save metrics
-METRICS_FILE="taskB_metrics_${{EXECUTION_ID}}.json"
+METRICS_FILE="/home/{RASPI_USER}/edge_only_taskB_metrics_${{EXECUTION_ID}}.json"
 cat > "${{METRICS_FILE}}" << EOF
 {{
   "task": "B",
-  "workflow": "${{WORKFLOW}}",
+  "workflow": "Edge-Only-Docker-File-Processing",
   "execution_id": "${{EXECUTION_ID}}",
   "duration_seconds": ${{DURATION}},
   "success": ${{SUCCESS}},
   "files_compressed": ${{FILES_COMPRESSED}},
   "input_directory": "${{INPUT_DIR}}",
   "output_directory": "${{OUTPUT_DIR}}",
-  "node": "edge-k8s"
+  "node": "edge-docker"
 }}
 EOF
 
@@ -242,13 +237,14 @@ echo "Metrics saved to: ${{METRICS_FILE}}"
 """
 
 taskB = DagonTask(
-    TaskType.KUBERNETES,
+    TaskType.DOCKER,
     "B",
     taskB_command,
     image="ubuntu:22.04",
     ip=RASPI_IP,
     ssh_username=RASPI_USER,
-    ssh_port=RASPI_PORT
+    working_dir=f"/home/{RASPI_USER}/docker_scratch_{EXECUTION_ID}/taskB",
+    volume=f"/home/{RASPI_USER}:/home/{RASPI_USER}"
 )
 
 workflow.add_task(taskB)
@@ -274,24 +270,26 @@ workflow_duration = workflow_end - workflow_start
 
 # ========== PERFORMANCE SUMMARY ==========
 print("\n" + "="*70)
-print("PERFORMANCE SUMMARY - EDGE KUBERNETES PROCESSING")
+print("PERFORMANCE SUMMARY - EDGE DOCKER PROCESSING")
 print("="*70)
 print(f"Execution ID: {EXECUTION_ID}")
 print(f"Total Duration: {workflow_duration:.2f}s")
 print(f"Status: {'SUCCESS' if workflow_success else 'FAILED'}")
 print("")
-print("Architecture: ALL tasks on K3S Pods (Edge)")
+print("Architecture: ALL tasks on Docker Containers (Edge)")
 print("")
 print("File Distribution:")
 print("  1KB files: 4")
 print("  1MB files: 3")
 print("  10MB files: 3")
 print("")
-print("Files Location (inside Pods):")
-print(f"  Generated: Task A working directory /generated_files/")
-print(f"  Compressed: Task B working directory /compressed_files/")
+print("Files Location (all on Raspberry Pi):")
+print(f"  Generated: /home/{RASPI_USER}/edge_only_files_{EXECUTION_ID}/")
+print(f"  Compressed: /home/{RASPI_USER}/edge_only_compressed_{EXECUTION_ID}/")
 print("")
-print("Metrics stored in Pods.")
+print("Metrics Files (on Raspberry Pi):")
+print(f"  Task A: /home/{RASPI_USER}/edge_only_taskA_metrics_{EXECUTION_ID}.json")
+print(f"  Task B: /home/{RASPI_USER}/edge_only_taskB_metrics_{EXECUTION_ID}.json")
 print("="*70 + "\n")
 
 # Allow time for cleanup
