@@ -36,13 +36,12 @@ SAMPLING_INTERVAL = config.getint('prometheus', 'sampling_interval', fallback=2)
 EXECUTION_ID = time.strftime("%Y%m%d_%H%M%S")
 
 print("="*70)
-print("DHT Workflow - Docker (UNIFIED METRICS)")
+print("DHT Workflow - Docker")
 print("="*70)
 print(f"Execution ID: {EXECUTION_ID}")
 print(f"Edge Node (Raspberry Pi): {RASPI_IP} - Task A")
 print(f"Fog Node (PC): localhost - Tasks B & C")
 print(f"MongoDB: {MONGO_DB}.{MONGO_COLLECTION}")
-print(f"Metrics: UNIFIED format (matches Apptainer)")
 print("="*70 + "\n")
 
 # Pre-create directories
@@ -590,7 +589,6 @@ print("="*70)
 print(f"Execution: {EXECUTION_ID}")
 print(f"Duration: {workflow_duration:.2f}s")
 print(f"Status: {'SUCCESS ✓' if workflow_success else 'FAILED ✗'}")
-print(f"\nMetrics format: UNIFIED (matches Apptainer)")
 print(f"Energy: {energy_stats.get('rpi_energy_wh', 0):.4f} Wh (RasPi)")
 if 'pc_energy_wh' in energy_stats:
     total = energy_stats.get('rpi_energy_wh', 0) + energy_stats.get('pc_energy_wh', 0)
