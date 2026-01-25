@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Dagon DHT Workflow with Energy Metrics Capture - Docker Version
-Integrates: DHT sensor + MongoDB + Prometheus energy metrics
-Uses Docker containers instead of Apptainer
+Dagon DHT Workflow - Docker Version with UNIFIED METRICS
+Matches Apptainer metrics structure exactly for fair comparison
 """
 
 import json, configparser, logging, time
@@ -31,59 +30,60 @@ except (configparser.NoOptionError, ValueError):
 MONGO_URI = config.get('mongodb', 'uri')
 MONGO_DB = config.get('mongodb', 'database')
 MONGO_COLLECTION = config.get('mongodb', 'collection')
-
 PROMETHEUS_URL = config.get('prometheus', 'url', fallback='http://localhost:9090')
 SAMPLING_INTERVAL = config.getint('prometheus', 'sampling_interval', fallback=2)
 
 EXECUTION_ID = time.strftime("%Y%m%d_%H%M%S")
 
 print("="*70)
-print("Dagon DHT Workflow with Energy Monitoring - Docker Version")
+print("DHT Workflow - Docker (UNIFIED METRICS)")
 print("="*70)
 print(f"Execution ID: {EXECUTION_ID}")
-print(f"Raspberry Pi: {RASPI_IP}")
+print(f"Edge Node (Raspberry Pi): {RASPI_IP} - Task A")
+print(f"Fog Node (PC): localhost - Tasks B & C")
 print(f"MongoDB: {MONGO_DB}.{MONGO_COLLECTION}")
-print(f"Prometheus: {PROMETHEUS_URL}")
-print(f"Sampling: every {SAMPLING_INTERVAL}s")
-print(f"Container Runtime: Docker")
+print(f"Metrics: UNIFIED format (matches Apptainer)")
 print("="*70 + "\n")
 
-workflow = Workflow("DHT-Sensor-Capture-And-Preprocess-Docker")
+# Pre-create directories
+FOG_DATA_DIR = f"/tmp/fog_data_{EXECUTION_ID}"
+DOCKER_SCRATCH_DIR = f"/tmp/docker_scratch_{EXECUTION_ID}"
 
-# ========== TASK A: DHT Sensor Capture ==========
+print("Creating local directories...")
+os.makedirs(FOG_DATA_DIR, mode=0o777, exist_ok=True)
+os.makedirs(f"{DOCKER_SCRATCH_DIR}/taskB", mode=0o777, exist_ok=True)
+os.makedirs(f"{DOCKER_SCRATCH_DIR}/taskC", mode=0o777, exist_ok=True)
+print(f"✓ Directories created\n")
+
+# ========== TASK A: DHT Sensor Capture (EDGE) ==========
 taskA_command = f"""
 TASK="A"
-WORKFLOW="DHT-Sensor-Capture-And-Preprocess-Docker"
+WORKFLOW="DHT-Sensor-Capture-And-Preprocess"
 EXECUTION_ID="{EXECUTION_ID}"
 
-METRICS_TMP="/tmp/dagon_${{TASK}}.prom"
-METRICS_DIR="/var/lib/node_exporter/textfile_collector"
-METRICS_CURRENT="${{METRICS_DIR}}/dagon_dht_${{TASK}}_current.prom"
-METRICS_HISTORY="/home/{RASPI_USER}/.dagon_metrics/history/dagon_dht_${{TASK}}_${{EXECUTION_ID}}.prom"
-METRICS_BACKUP="/home/{RASPI_USER}/.dagon_metrics/dagon_dht_${{TASK}}.prom"
+METRICS_FILE="/home/{RASPI_USER}/.dagon_metrics/history/dagon_dht_A_{EXECUTION_ID}.prom"
 
 START_TS=$(date +%s.%N)
 SUCCESS=1
 RECORDS=0
 
-LOG_FILE="/home/{RASPI_USER}/dagon_capture_${{EXECUTION_ID}}.log"
+LOG_FILE="/home/{RASPI_USER}/dagon_capture_{EXECUTION_ID}.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "=========================================="
-echo "Starting DHT sensor capture (Docker)"
-echo "Execution ID: ${{EXECUTION_ID}}"
-echo "Date: $(date)"
+echo "Task A: DHT Sensor Capture (EDGE)"
+echo "Execution ID: {EXECUTION_ID}"
 echo "=========================================="
+
+pip3 install --quiet --no-cache-dir pyserial 2>&1 | grep -v "already satisfied" || true
 
 python3 << 'EOF'
 import serial, re, json, time, os
 
 PORT = '/dev/ttyACM0'
 BAUDRATE = 9600
-DURATION = 60
+DURATION = 300  # Same as Apptainer: 5 minutes
 OUTPUT_FILE = 'output.json'
-
-print(f"Configuration:\\n  Port: {{PORT}}\\n  Duration: {{DURATION}}s")
 
 if not os.path.exists(PORT):
     print(f"ERROR: Port {{PORT}} not found")
@@ -92,153 +92,116 @@ if not os.path.exists(PORT):
 
 try:
     ser = serial.Serial(PORT, BAUDRATE, timeout=2)
-    print(f"Port {{PORT}} opened successfully\\n")
+    print(f"Port {{PORT}} opened\\n")
     print("Starting DHT11 sensor reading...")
+    
     data, start = [], time.time()
-
+    
     while time.time() - start < DURATION:
         line = ser.readline().decode('utf-8', errors='ignore').strip()
         if not line:
             continue
-        print(f"{{line}}")
+        print(line)
         m = re.search(r'Humidity:\\s*([\\d.]+).*Temperature:\\s*([\\d.]+)', line)
         if m:
             data.append({{'timestamp': time.time(), 'humidity': float(m[1]), 'temp_c': float(m[2])}})
-
+    
     ser.close()
     print(f"RECORDS_CAPTURED={{len(data)}}")
     json.dump(data, open(OUTPUT_FILE, 'w'), indent=2)
-    print(f"Data saved to {{OUTPUT_FILE}} ({{len(data)}} records)")
-
+    
 except Exception as e:
     json.dump({{'error': str(e), 'timestamp': time.time()}}, open(OUTPUT_FILE, 'w'), indent=2)
     print(f"ERROR: {{e}}")
     exit(1)
-
-print("Capture completed successfully")
 EOF
 
-DEST="/home/{RASPI_USER}/sensor_output_${{EXECUTION_ID}}.json"
-cp output.json "$DEST" 2>/dev/null || echo '{{"error":"output.json not created"}}' > "$DEST"
-
-echo "=========================================="
-echo "Log saved to: $LOG_FILE"
-echo "Results saved to: $DEST"
+DEST="/home/{RASPI_USER}/sensor_output_{EXECUTION_ID}.json"
+cp output.json "$DEST" 2>/dev/null || echo '{{"error":"file not created"}}' > "$DEST"
 
 END_TS=$(date +%s.%N)
 DURATION=$(awk "BEGIN {{print ${{END_TS}}-${{START_TS}}}}")
-
 RECORDS=$(grep -o "RECORDS_CAPTURED=[0-9]*" "$LOG_FILE" | tail -1 | cut -d= -f2)
 RECORDS=${{RECORDS:-0}}
 
 grep -q "ERROR" "$LOG_FILE" && SUCCESS=0
 
-cat <<EOF_METRICS > ${{METRICS_TMP}}
+# UNIFIED METRICS FORMAT (matches Apptainer)
+mkdir -p $(dirname ${{METRICS_FILE}})
+cat > ${{METRICS_FILE}} << EOF_METRICS
 # HELP dagon_task_duration_seconds Duration of a Dagon task
 # TYPE dagon_task_duration_seconds gauge
-dagon_task_duration_seconds{{workflow="${{WORKFLOW}}",task="${{TASK}}",execution_id="${{EXECUTION_ID}}"}} ${{DURATION}}
+dagon_task_duration_seconds{{workflow="DHT-Sensor-Capture-And-Preprocess",task="A",execution_id="{EXECUTION_ID}"}} ${{DURATION}}
 
 # HELP dagon_task_success Task success (1=success, 0=failure)
 # TYPE dagon_task_success gauge
-dagon_task_success{{workflow="${{WORKFLOW}}",task="${{TASK}}",execution_id="${{EXECUTION_ID}}"}} ${{SUCCESS}}
+dagon_task_success{{workflow="DHT-Sensor-Capture-And-Preprocess",task="A",execution_id="{EXECUTION_ID}"}} ${{SUCCESS}}
 
 # HELP dagon_task_records_total Records processed by task
 # TYPE dagon_task_records_total gauge
-dagon_task_records_total{{workflow="${{WORKFLOW}}",task="${{TASK}}",execution_id="${{EXECUTION_ID}}"}} ${{RECORDS}}
+dagon_task_records_total{{workflow="DHT-Sensor-Capture-And-Preprocess",task="A",execution_id="{EXECUTION_ID}"}} ${{RECORDS}}
 
 # HELP dagon_execution_start_timestamp_seconds Start timestamp of execution
 # TYPE dagon_execution_start_timestamp_seconds gauge
-dagon_execution_start_timestamp_seconds{{workflow="${{WORKFLOW}}",task="${{TASK}}",execution_id="${{EXECUTION_ID}}"}} ${{START_TS}}
+dagon_execution_start_timestamp_seconds{{workflow="DHT-Sensor-Capture-And-Preprocess",task="A",execution_id="{EXECUTION_ID}"}} ${{START_TS}}
 EOF_METRICS
 
-mkdir -p $(dirname ${{METRICS_HISTORY}})
-cp ${{METRICS_TMP}} ${{METRICS_HISTORY}}
-echo "Metrics history saved: ${{METRICS_HISTORY}}"
-
-mkdir -p $(dirname ${{METRICS_BACKUP}})
-cp ${{METRICS_TMP}} ${{METRICS_BACKUP}}
-echo "Metrics backup saved: ${{METRICS_BACKUP}}"
-
-if [ -d "${{METRICS_DIR}}" ]; then
-    cp ${{METRICS_TMP}} ${{METRICS_CURRENT}} 2>/dev/null && echo "Metrics published to Prometheus: ${{METRICS_CURRENT}}" || echo "Warning: Could not publish to Prometheus"
-fi
-
-echo "${{EXECUTION_ID}}" > /home/{RASPI_USER}/.dagon_metrics/current_execution_id
-
-echo "=========================================="
+echo "{EXECUTION_ID}" > /home/{RASPI_USER}/.dagon_metrics/current_execution_id
+echo "✓ Task A completed (metrics saved)"
 """
 
-taskA = DagonTask(
-    TaskType.DOCKER,
-    "A",
-    taskA_command,
-    image="python_dht:latest",
-    ip=RASPI_IP,
-    ssh_username=RASPI_USER,
-    ssh_port=RASPI_PORT,
-    working_dir=f"/home/{RASPI_USER}/docker_scratch_{EXECUTION_ID}/taskA",
-    volume=f"/home/{RASPI_USER}:/home/{RASPI_USER}",
-    devices=["/dev/ttyACM0:/dev/ttyACM0"],
-    pull=False
-)
-
-workflow.add_task(taskA)
-
-
-# ========== TASK B: Data Preprocessing ==========
+# ========== TASK B: Preprocessing (FOG - PC) ==========
 taskB_command = f"""
 TASK="B"
-WORKFLOW="DHT-Sensor-Capture-And-Preprocess-Docker"
+EXECUTION_ID="{EXECUTION_ID}"
 
-EXECUTION_ID=$(cat /home/{RASPI_USER}/.dagon_metrics/current_execution_id 2>/dev/null || echo "{EXECUTION_ID}")
-
-METRICS_TMP="/tmp/dagon_${{TASK}}.prom"
-METRICS_DIR="/var/lib/node_exporter/textfile_collector"
-METRICS_CURRENT="${{METRICS_DIR}}/dagon_dht_${{TASK}}_current.prom"
-METRICS_HISTORY="/home/{RASPI_USER}/.dagon_metrics/history/dagon_dht_${{TASK}}_${{EXECUTION_ID}}.prom"
-METRICS_BACKUP="/home/{RASPI_USER}/.dagon_metrics/dagon_dht_${{TASK}}.prom"
+DATA_DIR="/tmp/fog_data_{EXECUTION_ID}"
+INPUT_FILE="${{DATA_DIR}}/sensor_output_{EXECUTION_ID}.json"
+OUTPUT_FILE="${{DATA_DIR}}/sensor_output_{EXECUTION_ID}_preprocessed.json"
+LOG_FILE="${{DATA_DIR}}/taskB.log"
+METRICS_FILE="${{DATA_DIR}}/taskB_metrics.prom"
 
 START_TS=$(date +%s.%N)
 SUCCESS=1
 RECORDS=0
 
-LOG_FILE="/home/{RASPI_USER}/dagon_preprocess_${{EXECUTION_ID}}.log"
+echo "==========================================" | tee "$LOG_FILE"
+echo "Task B: Preprocessing (FOG/PC)" | tee -a "$LOG_FILE"
+echo "Execution ID: {EXECUTION_ID}" | tee -a "$LOG_FILE"
+echo "==========================================" | tee -a "$LOG_FILE"
 
-echo "==========================================" >> "$LOG_FILE"
-echo "Starting preprocessing (Docker)" >> "$LOG_FILE"
-echo "Execution ID: ${{EXECUTION_ID}}" >> "$LOG_FILE"
-echo "Date: $(date)" >> "$LOG_FILE"
-echo "==========================================" >> "$LOG_FILE"
+if [ ! -f "${{INPUT_FILE}}" ]; then
+    echo "ERROR: Input not found: ${{INPUT_FILE}}" | tee -a "$LOG_FILE"
+    exit 1
+fi
 
-python3 << 'EOF' >> "$LOG_FILE" 2>&1
-import json, glob, os, time
+pip3 install --quiet --no-cache-dir pandas 2>&1 | grep -v "already satisfied" >> "$LOG_FILE" || true
+
+# Add sleep to match Apptainer version timing
+sleep 2
+
+python3 << 'PYEOF' 2>&1 | tee -a "$LOG_FILE"
+import json, os
 import pandas as pd
 
-with open('/home/{RASPI_USER}/.dagon_metrics/current_execution_id') as f:
-    execution_id = f.read().strip()
+EXECUTION_ID = "{EXECUTION_ID}"
+DATA_DIR = f"/tmp/fog_data_{{EXECUTION_ID}}"
+INPUT_FILE = f"{{DATA_DIR}}/sensor_output_{{EXECUTION_ID}}.json"
+OUTPUT_FILE = f"{{DATA_DIR}}/sensor_output_{{EXECUTION_ID}}_preprocessed.json"
 
-time.sleep(2)
+print(f"Processing: {{INPUT_FILE}}")
 
-input_file = f'/home/{RASPI_USER}/sensor_output_{{execution_id}}.json'
-output_file = input_file.replace('.json', '_preprocessed.json')
-
-if not os.path.exists(input_file):
-    print(f"ERROR: Input file not found: {{input_file}}")
-    exit(1)
-
-print(f"Processing: {{input_file}}")
-
-with open(input_file) as f:
+with open(INPUT_FILE) as f:
     data = json.load(f)
 
 if isinstance(data, dict) and 'error' in data:
-    print(f"ERROR in input file: {{data['error']}}")
+    print(f"ERROR: {{data['error']}}")
     exit(1)
 
 df = pd.DataFrame(data)
 
 if df.empty or 'humidity' not in df or 'temp_c' not in df:
-    print("ERROR: No data to process or missing keys")
+    print("ERROR: Invalid data")
     exit(1)
 
 summary = {{
@@ -255,140 +218,93 @@ summary = {{
 
 print(f"RECORDS_CAPTURED={{summary['count']}}")
 print(f"  Mean Humidity: {{summary['mean_humidity']:.2f}}%")
-print(f"  Mean Temp: {{summary['mean_temp_c']:.2f}}C")
+print(f"  Mean Temp: {{summary['mean_temp_c']:.2f}}°C")
 
-with open(output_file, 'w') as out:
-    json.dump({{"execution_id": execution_id, "summary": summary, "raw": data}}, out, indent=2)
+with open(OUTPUT_FILE, 'w') as out:
+    json.dump({{"execution_id": EXECUTION_ID, "summary": summary, "raw": data}}, out, indent=2)
 
-print(f"Preprocessed file saved to {{output_file}}")
+print(f"✓ Output saved: {{OUTPUT_FILE}}")
 print("Preprocessing completed successfully")
-EOF
+PYEOF
 
 PYTHON_EXIT=$?
 
-echo "==========================================" >> "$LOG_FILE"
-echo "Python script exit code: $PYTHON_EXIT" >> "$LOG_FILE"
-echo "Log saved to: $LOG_FILE" >> "$LOG_FILE"
-
 END_TS=$(date +%s.%N)
 DURATION=$(awk "BEGIN {{print ${{END_TS}}-${{START_TS}}}}")
-
 RECORDS=$(grep -o "RECORDS_CAPTURED=[0-9]*" "$LOG_FILE" | tail -1 | cut -d= -f2)
 RECORDS=${{RECORDS:-0}}
 
 grep -q "ERROR" "$LOG_FILE" && SUCCESS=0
 [ $PYTHON_EXIT -ne 0 ] && SUCCESS=0
 
-cat <<EOF_METRICS > ${{METRICS_TMP}}
+# UNIFIED METRICS FORMAT (matches Apptainer)
+cat > ${{METRICS_FILE}} << EOF_METRICS
 # HELP dagon_task_duration_seconds Duration of a Dagon task
 # TYPE dagon_task_duration_seconds gauge
-dagon_task_duration_seconds{{workflow="${{WORKFLOW}}",task="${{TASK}}",execution_id="${{EXECUTION_ID}}"}} ${{DURATION}}
+dagon_task_duration_seconds{{workflow="DHT-Sensor-Capture-And-Preprocess",task="B",execution_id="{EXECUTION_ID}"}} ${{DURATION}}
 
 # HELP dagon_task_success Task success (1=success, 0=failure)
 # TYPE dagon_task_success gauge
-dagon_task_success{{workflow="${{WORKFLOW}}",task="${{TASK}}",execution_id="${{EXECUTION_ID}}"}} ${{SUCCESS}}
+dagon_task_success{{workflow="DHT-Sensor-Capture-And-Preprocess",task="B",execution_id="{EXECUTION_ID}"}} ${{SUCCESS}}
 
 # HELP dagon_task_records_total Records processed by task
 # TYPE dagon_task_records_total gauge
-dagon_task_records_total{{workflow="${{WORKFLOW}}",task="${{TASK}}",execution_id="${{EXECUTION_ID}}"}} ${{RECORDS}}
+dagon_task_records_total{{workflow="DHT-Sensor-Capture-And-Preprocess",task="B",execution_id="{EXECUTION_ID}"}} ${{RECORDS}}
 
 # HELP dagon_execution_start_timestamp_seconds Start timestamp of execution
 # TYPE dagon_execution_start_timestamp_seconds gauge
-dagon_execution_start_timestamp_seconds{{workflow="${{WORKFLOW}}",task="${{TASK}}",execution_id="${{EXECUTION_ID}}"}} ${{START_TS}}
+dagon_execution_start_timestamp_seconds{{workflow="DHT-Sensor-Capture-And-Preprocess",task="B",execution_id="{EXECUTION_ID}"}} ${{START_TS}}
 EOF_METRICS
 
-mkdir -p $(dirname ${{METRICS_HISTORY}})
-cp ${{METRICS_TMP}} ${{METRICS_HISTORY}}
-echo "Metrics history saved: ${{METRICS_HISTORY}}" >> "$LOG_FILE"
-
-mkdir -p $(dirname ${{METRICS_BACKUP}})
-cp ${{METRICS_TMP}} ${{METRICS_BACKUP}}
-echo "Metrics backup saved: ${{METRICS_BACKUP}}" >> "$LOG_FILE"
-
-if [ -d "${{METRICS_DIR}}" ]; then
-    cp ${{METRICS_TMP}} ${{METRICS_CURRENT}} 2>/dev/null && echo "Metrics published to Prometheus: ${{METRICS_CURRENT}}" >> "$LOG_FILE" || echo "Warning: Could not publish to Prometheus" >> "$LOG_FILE"
-fi
-
-echo "==========================================" >> "$LOG_FILE"
+echo "✓ Task B completed" | tee -a "$LOG_FILE"
 
 exit $PYTHON_EXIT
 """
 
-taskB = DagonTask(
-    TaskType.DOCKER,
-    "B",
-    taskB_command,
-    image="python_dht:latest",
-    ip=RASPI_IP,
-    ssh_username=RASPI_USER,
-    ssh_port=RASPI_PORT,
-    working_dir=f"/home/{RASPI_USER}/docker_scratch_{EXECUTION_ID}/taskB",
-    volume=f"/home/{RASPI_USER}:/home/{RASPI_USER}",
-    pull=False
-)
-
-workflow.add_task(taskB)
-taskB.add_dependency_to(taskA)
-
-
-# ========== TASK C: Export to MongoDB ==========
+# ========== TASK C: MongoDB Export (FOG - PC) ==========
 taskC_command = f"""
 TASK="C"
-WORKFLOW="DHT-Sensor-Capture-And-Preprocess-Docker"
+EXECUTION_ID="{EXECUTION_ID}"
 
-EXECUTION_ID=$(cat /home/{RASPI_USER}/.dagon_metrics/current_execution_id 2>/dev/null || echo "{EXECUTION_ID}")
+DATA_DIR="/tmp/fog_data_{EXECUTION_ID}"
+INPUT_FILE="${{DATA_DIR}}/sensor_output_{EXECUTION_ID}_preprocessed.json"
+LOG_FILE="${{DATA_DIR}}/taskC.log"
 
-START_TS=$(date +%s.%N)
-SUCCESS=1
+echo "==========================================" | tee "$LOG_FILE"
+echo "Task C: MongoDB Export (FOG/PC)" | tee -a "$LOG_FILE"
+echo "Execution ID: {EXECUTION_ID}" | tee -a "$LOG_FILE"
+echo "==========================================" | tee -a "$LOG_FILE"
 
-LOG_FILE="/home/{RASPI_USER}/dagon_mongodb_export_${{EXECUTION_ID}}.log"
+if [ ! -f "${{INPUT_FILE}}" ]; then
+    echo "ERROR: Input not found" | tee -a "$LOG_FILE"
+    exit 1
+fi
 
-echo "==========================================" >> "$LOG_FILE"
-echo "Starting MongoDB export (Docker)" >> "$LOG_FILE"
-echo "Execution ID: ${{EXECUTION_ID}}" >> "$LOG_FILE"
-echo "Date: $(date)" >> "$LOG_FILE"
-echo "MongoDB: {MONGO_URI}" >> "$LOG_FILE"
-echo "==========================================" >> "$LOG_FILE"
+pip3 install --quiet --no-cache-dir pymongo 2>&1 | grep -v "already satisfied" >> "$LOG_FILE" || true
 
-python3 << 'PYEOF' >> "$LOG_FILE" 2>&1
-import json, re, time, os
+python3 << 'PYEOF' 2>&1 | tee -a "$LOG_FILE"
+import json, re, os
 from pymongo import MongoClient
 from datetime import datetime, timezone
 
-with open('/home/{RASPI_USER}/.dagon_metrics/current_execution_id') as f:
-    execution_id = f.read().strip()
+DATA_DIR = "/tmp/fog_data_{EXECUTION_ID}"
+INPUT_FILE = f"{{DATA_DIR}}/sensor_output_{EXECUTION_ID}_preprocessed.json"
 
-MONGO_URI = "{MONGO_URI}"
-MONGO_DB = "{MONGO_DB}"
-MONGO_COLLECTION = "{MONGO_COLLECTION}"
-RASPI_IP = "{RASPI_IP}"
-
-print(f"Execution ID: {{execution_id}}")
-print(f"Connecting to MongoDB: {{MONGO_URI}}")
+with open(INPUT_FILE) as f:
+    data = json.load(f)
 
 try:
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=10000)
-    db = client[MONGO_DB]
-    collection = db[MONGO_COLLECTION]
-    
+    client = MongoClient("{MONGO_URI}", serverSelectionTimeoutMS=10000)
+    db = client["{MONGO_DB}"]
+    collection = db["{MONGO_COLLECTION}"]
     client.server_info()
-    print("MongoDB connection successful")
+    print("✓ MongoDB connected")
     
-    if collection.find_one({{"execution_id": execution_id}}):
-        print(f"Warning: Execution {{execution_id}} already exported to MongoDB")
+    if collection.find_one({{"execution_id": "{EXECUTION_ID}"}}):
+        print("⚠ Already exists")
         exit(0)
     
-    preprocessed_file = f'/home/{RASPI_USER}/sensor_output_{{execution_id}}_preprocessed.json'
-    
-    if not os.path.exists(preprocessed_file):
-        print(f"ERROR: Preprocessed file not found: {{preprocessed_file}}")
-        exit(1)
-    
-    print(f"Reading: {{preprocessed_file}}")
-    
-    with open(preprocessed_file) as f:
-        data = json.load(f)
-    
+    # Parse metrics from BOTH tasks (A and B) - UNIFIED FORMAT
     def parse_prometheus_metrics(metric_file):
         metrics = {{}}
         try:
@@ -402,27 +318,45 @@ try:
                         key = metric_name.replace('dagon_', '').replace('_seconds', '')
                         metrics[f'task_{{task}}_{{key}}'] = float(value)
         except Exception as e:
-            print(f"Warning: Could not read metrics from {{metric_file}}: {{e}}")
+            print(f"Warning: Could not read {{metric_file}}: {{e}}")
         return metrics
     
-    metrics = {{}}
-    for task in ['A', 'B']:
-        metric_file = f'/home/{RASPI_USER}/.dagon_metrics/history/dagon_dht_{{task}}_{{execution_id}}.prom'
-        metrics.update(parse_prometheus_metrics(metric_file))
+    # Collect metrics from Task B (local)
+    metrics = parse_prometheus_metrics(f'{{DATA_DIR}}/taskB_metrics.prom')
     
-    total_duration = metrics.get('task_A_task_duration', 0) + metrics.get('task_B_task_duration', 0)
+    # Fetch Task A metrics from Edge via SCP
+    import subprocess
+    edge_metrics = "/home/{RASPI_USER}/.dagon_metrics/history/dagon_dht_A_{EXECUTION_ID}.prom"
+    local_metrics = f"{{DATA_DIR}}/taskA_metrics.prom"
     
+    scp_cmd = ['scp', '-P', '{RASPI_PORT}',
+               f'{RASPI_USER}@{RASPI_IP}:{{edge_metrics}}',
+               local_metrics]
+    
+    try:
+        result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            print(f"✓ Fetched Task A metrics from Edge")
+            metrics.update(parse_prometheus_metrics(local_metrics))
+        else:
+            print(f"⚠ Could not fetch Task A metrics: {{result.stderr}}")
+    except Exception as e:
+        print(f"⚠ Could not fetch Task A metrics: {{e}}")
+    
+    # Calculate total duration (sum of all tasks)
+    total_duration = sum([v for k, v in metrics.items() if 'task_duration' in k])
+    
+    # UNIFIED DOCUMENT STRUCTURE (matches Apptainer)
     document = {{
-        "execution_id": execution_id,
-        "workflow": "DHT-Sensor-Capture-And-Preprocess-Docker",
-        "container_runtime": "docker",
+        "execution_id": "{EXECUTION_ID}",
+        "workflow": "DHT-Sensor-Capture-And-Preprocess",
         "export_timestamp": datetime.now(timezone.utc),
-        "raspberry_pi": RASPI_IP,
+        "raspberry_pi": "{RASPI_IP}",
         "summary": data.get("summary", {{}}),
         "metrics": metrics,
         "total_duration_seconds": total_duration,
         "raw_data_count": len(data.get("raw", [])),
-        "source_file": preprocessed_file,
+        "source_file": INPUT_FILE,
         "all_tasks_successful": (
             metrics.get('task_A_task_success', 0) == 1 and 
             metrics.get('task_B_task_success', 0) == 1
@@ -430,99 +364,106 @@ try:
     }}
     
     result = collection.insert_one(document)
-    print(f"Document inserted with ID: {{result.inserted_id}}")
+    print(f"✓ Inserted: {{result.inserted_id}}")
     print(f"  Records: {{data['summary']['count']}}")
-    print(f"  Mean temp: {{data['summary']['mean_temp_c']:.2f}}C")
+    print(f"  Mean temp: {{data['summary']['mean_temp_c']:.2f}}°C")
     print(f"  Mean humidity: {{data['summary']['mean_humidity']:.2f}}%")
     print(f"  Total duration: {{total_duration:.2f}}s")
-    
-    total_docs = collection.count_documents({{}})
-    print(f"\\nTotal executions in MongoDB: {{total_docs}}")
-    
-    print("\\nMongoDB export completed successfully")
+    print(f"\\n✓ Total docs: {{collection.count_documents({{}})}}")
     
 except Exception as e:
-    print(f"ERROR: {{e}}")
+    print(f"✗ ERROR: {{e}}")
     import traceback
     traceback.print_exc()
     exit(1)
 finally:
     client.close()
-
 PYEOF
 
-PYTHON_EXIT=$?
-
-echo "==========================================" >> "$LOG_FILE"
-echo "Python script exit code: $PYTHON_EXIT" >> "$LOG_FILE"
-echo "Log saved to: $LOG_FILE" >> "$LOG_FILE"
-echo "==========================================" >> "$LOG_FILE"
-
-exit $PYTHON_EXIT
+echo "✓ Task C completed" | tee -a "$LOG_FILE"
+exit $?
 """
 
-taskC = DagonTask(
-    TaskType.DOCKER,
-    "C",
-    taskC_command,
-    image="python_dht:latest",
-    ip=RASPI_IP,
-    ssh_username=RASPI_USER,
-    ssh_port=RASPI_PORT,
-    working_dir=f"/home/{RASPI_USER}/docker_scratch_{EXECUTION_ID}/taskC",
-    volume=f"/home/{RASPI_USER}:/home/{RASPI_USER}",
-    pull=False
-)
-
-workflow.add_task(taskC)
-taskC.add_dependency_to(taskB)
-
-
-# ========== WORKFLOW EVENT FUNCTIONS ==========
-def write_workflow_event(metric_name, workflow_name, execution_id):
-    """
-    Writes a point-in-time metric for Prometheus on the Raspberry Pi via SSH
-    """
-    metrics_dir = "/var/lib/node_exporter/textfile_collector"
-    tmp_file = f"/tmp/{metric_name}.prom"
-    final_file = f"{metrics_dir}/{metric_name}.prom"
+# ========== EXECUTION FUNCTION ==========
+def execute_with_transfer():
+    """Execute workflow with file transfer"""
     
-    timestamp = int(time.time() * 1000)
+    # Phase 1: Task A on Edge
+    print("="*70)
+    print("PHASE 1: Task A (Edge - Raspberry Pi)")
+    print("="*70)
     
-    metric = f"""# HELP {metric_name} Dagon workflow event
-# TYPE {metric_name} gauge
-{metric_name}{{workflow="{workflow_name}",execution_id="{execution_id}"}} {timestamp}
-"""
+    taskA = DagonTask(
+        TaskType.DOCKER,
+        "A",
+        taskA_command,
+        image="python:3.9-slim",
+        ip=RASPI_IP,
+        ssh_username=RASPI_USER,
+        ssh_port=RASPI_PORT,
+        working_dir=f"/home/{RASPI_USER}/docker_scratch_{EXECUTION_ID}/taskA",
+        volume=f"/home/{RASPI_USER}:/home/{RASPI_USER}",
+        devices=["/dev/ttyACM0:/dev/ttyACM0"]
+    )
     
-    try:
-        ssh_cmd = [
-            'ssh',
-            '-p', str(RASPI_PORT),
-            f'{RASPI_USER}@{RASPI_IP}',
-            f"cat > {tmp_file} << 'EOF'\n{metric}EOF\nmv {tmp_file} {final_file} && chmod 644 {final_file}"
-        ]
-        
-        result = subprocess.run(
-            ssh_cmd,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        if result.returncode == 0:
-            print(f"Workflow event published: {metric_name}")
-        else:
-            print(f"Warning: Could not write workflow event {metric_name}")
-            
-    except subprocess.TimeoutExpired:
-        print(f"Timeout writing workflow event {metric_name}")
-    except Exception as e:
-        print(f"Could not write workflow event {metric_name}: {e}")
+    workflow_a = Workflow("Task-A")
+    workflow_a.add_task(taskA)
+    workflow_a.run()
+    print("✓ Task A completed\n")
+    
+    # Phase 2: Transfer
+    print("="*70)
+    print("PHASE 2: File Transfer (Edge → Fog)")
+    print("="*70)
+    
+    edge_file = f"/home/{RASPI_USER}/sensor_output_{EXECUTION_ID}.json"
+    local_file = f"{FOG_DATA_DIR}/sensor_output_{EXECUTION_ID}.json"
+    
+    scp_cmd = ['scp', '-P', str(RASPI_PORT),
+               f'{RASPI_USER}@{RASPI_IP}:{edge_file}',
+               local_file]
+    
+    print(f"Transferring: {edge_file}")
+    result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
+    
+    if result.returncode == 0 and os.path.exists(local_file):
+        size = os.path.getsize(local_file)
+        print(f"✓ Transfer OK ({size} bytes)\n")
+    else:
+        raise Exception(f"Transfer failed: {result.stderr}")
+    
+    # Phase 3: Tasks B & C on Fog
+    print("="*70)
+    print("PHASE 3: Tasks B & C (Fog - PC)")
+    print("="*70)
+    
+    taskB_new = DagonTask(
+        TaskType.DOCKER,
+        "B",
+        taskB_command,
+        image="python:3.9-slim",
+        working_dir=f"{DOCKER_SCRATCH_DIR}/taskB",
+        volume="/tmp:/tmp"
+    )
+    
+    taskC_new = DagonTask(
+        TaskType.DOCKER,
+        "C",
+        taskC_command,
+        image="python:3.9-slim",
+        working_dir=f"{DOCKER_SCRATCH_DIR}/taskC",
+        volume="/tmp:/tmp"
+    )
+    
+    workflow_bc = Workflow("Tasks-BC")
+    workflow_bc.add_task(taskB_new)
+    workflow_bc.add_task(taskC_new)
+    taskC_new.add_dependency_to(taskB_new)
+    workflow_bc.run()
+    print("✓ Tasks B & C completed\n")
 
-
+# ========== MAIN EXECUTION ==========
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)-8s %(message)s')
-
-# ========== ENERGY MONITORING ==========
 
 energy_collector = PrometheusMetricsCollector(
     prometheus_url=PROMETHEUS_URL,
@@ -532,61 +473,41 @@ energy_collector = PrometheusMetricsCollector(
 print("Starting energy monitoring...\n")
 energy_collector.start_collection()
 
-print(f"Executing workflow (Tasks A, B, C)...\n")
-
-write_workflow_event(
-    metric_name="dagon_workflow_start",
-    workflow_name=workflow.name,
-    execution_id=EXECUTION_ID
-)
-
 workflow_start = time.time()
 
 try:
-    workflow.run()
+    execute_with_transfer()
     workflow_success = True
 except Exception as e:
-    print(f"Error in workflow: {e}")
+    workflow_success = False
+    print(f"\n✗ Error: {e}")
     import traceback
     traceback.print_exc()
-    workflow_success = False
-
-write_workflow_event(
-    metric_name="dagon_workflow_end",
-    workflow_name=workflow.name,
-    execution_id=EXECUTION_ID
-)
 
 workflow_end = time.time()
 workflow_duration = workflow_end - workflow_start
 
-print(f"\nStopping energy monitoring...")
+print(f"Stopping energy monitoring...")
 energy_collector.stop_collection()
-
 energy_stats = energy_collector.calculate_statistics()
 energy_collector.print_summary()
 
 energy_filename = f"energy_metrics_{EXECUTION_ID}.json"
 energy_collector.export_to_json(energy_filename)
 
-# ========== EXPORT TO MONGODB ==========
+# ========== MONGODB ENERGY UPDATE (UNIFIED FORMAT) ==========
 print("\n" + "="*70)
-print("Adding energy metrics to MongoDB...")
+print("Updating MongoDB with energy metrics...")
 print("="*70)
 
 try:
     client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=10000)
     db = client[MONGO_DB]
     collection = db[MONGO_COLLECTION]
-    
     client.server_info()
-    print("Connected to MongoDB")
     
-    workflow_doc = collection.find_one({"execution_id": EXECUTION_ID})
-    
-    if workflow_doc:
-        print(f"Found workflow document")
-        
+    if collection.find_one({"execution_id": EXECUTION_ID}):
+        # UNIFIED energy structure (matches Apptainer exactly)
         update_data = {
             "$set": {
                 "energy_monitoring": {
@@ -644,42 +565,36 @@ try:
                             "total_joules": energy_stats.get('pc_energy_joules', 0),
                             "total_wh": energy_stats.get('pc_energy_wh', 0)
                         }
-                    } if 'pc_energy_wh' in energy_stats else {},
+                    } if 'pc_power_watts_mean' in energy_stats else {},
                 },
-                
                 "energy_metrics_added_at": datetime.now(timezone.utc)
             }
         }
         
-        result = collection.update_one(
-            {"execution_id": EXECUTION_ID},
-            update_data
-        )
-        
-        print(f"Energy metrics added to document")
-        print(f"   RasPi Energy: {energy_stats.get('rpi_energy_wh', 0):.4f} Wh")
+        collection.update_one({"execution_id": EXECUTION_ID}, update_data)
+        print(f"✓ Energy metrics updated")
+        print(f"  RasPi: {energy_stats.get('rpi_energy_wh', 0):.4f} Wh")
         if 'pc_energy_wh' in energy_stats:
-            print(f"   PC Energy: {energy_stats.get('pc_energy_wh', 0):.4f} Wh")
-        
+            print(f"  PC: {energy_stats.get('pc_energy_wh', 0):.4f} Wh")
     else:
-        print(f"Warning: Workflow document not found")
-        print("    This can happen if Task C failed or did not complete")
+        print("⚠ Document not found")
     
     client.close()
-    
 except Exception as e:
-    print(f"Error exporting to MongoDB: {e}")
-    import traceback
-    traceback.print_exc()
+    print(f"⚠ Could not update energy: {e}")
 
-
+# ========== SUMMARY ==========
 print("\n" + "="*70)
-print("WORKFLOW COMPLETED - DOCKER VERSION")
+print("WORKFLOW SUMMARY")
 print("="*70)
-print(f"Total duration: {workflow_duration:.2f}s")
-print(f"RasPi Energy: {energy_stats.get('rpi_energy_wh', 0):.4f} Wh")
+print(f"Execution: {EXECUTION_ID}")
+print(f"Duration: {workflow_duration:.2f}s")
+print(f"Status: {'SUCCESS ✓' if workflow_success else 'FAILED ✗'}")
+print(f"\nMetrics format: UNIFIED (matches Apptainer)")
+print(f"Energy: {energy_stats.get('rpi_energy_wh', 0):.4f} Wh (RasPi)")
 if 'pc_energy_wh' in energy_stats:
-    print(f"PC Energy: {energy_stats.get('pc_energy_wh', 0):.4f} Wh")
-print(f"\nLocal metrics: {energy_filename}")
-print(f"MongoDB: {MONGO_DB}.{MONGO_COLLECTION}")
+    total = energy_stats.get('rpi_energy_wh', 0) + energy_stats.get('pc_energy_wh', 0)
+    print(f"        {energy_stats.get('pc_energy_wh', 0):.4f} Wh (PC)")
+    print(f"        {total:.4f} Wh (TOTAL)")
+print(f"\nMongoDB: {MONGO_DB}.{MONGO_COLLECTION}")
 print("="*70 + "\n")
