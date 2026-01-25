@@ -17,7 +17,7 @@ class DockerTask(Batch):
 
     """
 
-    def __init__(self, name, command, image=None, container_id=None, working_dir=None, globusendpoint=None, remove=True, volume=None, transversal_workflow=None):
+    def __init__(self, name, command, image=None, container_id=None, working_dir=None, globusendpoint=None, remove=True, volume=None, devices=None, transversal_workflow=None, pull=True):
         """
         :param name: task name
         :type name: str
@@ -36,6 +36,9 @@ class DockerTask(Batch):
 
         :param remove: if it's True the container is removed after the task ends its execution
         :type remove: bool
+        
+        :param pull: if it's True the image will be pulled from registry
+        :type pull: bool
         """
 
         Task.__init__(self, name, command, working_dir=working_dir,
@@ -46,6 +49,8 @@ class DockerTask(Batch):
         self.remove = remove
         self.image = image
         self.volume = volume
+        self.devices = devices
+        self.pull = pull  # ← AÑADIDO
         try:
             self.docker_client2 = docker.from_env()
         except Exception:
@@ -131,14 +136,10 @@ class DockerTask(Batch):
     def create_container(self):
         """
         Creates the container where the task will be executed
-
-        :return: container key
-        :rtype: string
-
-        :raises Exception: a problem occurred while container creation
         """
-
-        self.pull_image(self.image)
+        # ← MODIFICADO: Solo hacer pull si self.pull == True
+        if self.pull:
+            self.pull_image(self.image)
 
         volumes = {}
         
@@ -160,9 +161,20 @@ class DockerTask(Batch):
                 if normalized_volume not in volumes:
                     volumes[normalized_volume] = {"bind": normalized_volume, "mode": "rw"}
 
+        # AÑADIR SOPORTE PARA DEVICES
         try:
-            container = self.docker_client2.containers.run(
-                self.image, detach=True, stdin_open=True, volumes=volumes)
+            container_kwargs = {
+                "image": self.image,
+                "detach": True,
+                "stdin_open": True,
+                "volumes": volumes
+            }
+            
+            # Añadir devices si están especificados
+            if self.devices:
+                container_kwargs["devices"] = self.devices
+            
+            container = self.docker_client2.containers.run(**container_kwargs)
             self.workflow.logger.info("%s: Container created with %s", self.name, container.id)
             return container
         except Exception as e:
@@ -222,7 +234,7 @@ class DockerRemoteTask(RemoteTask, DockerTask):
     """
 
     def __init__(self, name, command, image=None, container_id=None, ip=None, ssh_username=None, keypath=None,
-                 working_dir=None, remove=True, globusendpoint=None, volume=None, ssh_port=22):  # AÑADE ssh_port=22
+                 working_dir=None, remove=True, globusendpoint=None, volume=None, devices=None, ssh_port=22, pull=True):  # ← AÑADIDO pull=True
         """
         :param name: task name
         :type name: str
@@ -256,12 +268,15 @@ class DockerRemoteTask(RemoteTask, DockerTask):
         
         :param ssh_port: SSH port (default: 22)
         :type ssh_port: int
+        
+        :param pull: if it's True the image will be pulled from registry
+        :type pull: bool
         """
 
         DockerTask.__init__(self, name, command, container_id=container_id, working_dir=working_dir, image=image,
-                            remove=remove, globusendpoint=globusendpoint, volume=volume)
+                            remove=remove, globusendpoint=globusendpoint, volume=volume, devices=devices, pull=pull)  # ← AÑADIDO pull=pull
         RemoteTask.__init__(self, name=name, ssh_username=ssh_username, keypath=keypath, command=command, ip=ip,
-                            working_dir=working_dir, globusendpoint=globusendpoint, ssh_port=ssh_port)  # AÑADE ssh_port
+                            working_dir=working_dir, globusendpoint=globusendpoint, ssh_port=ssh_port)  
         
         # Construir la URL SSH con el puerto si no es el 22 por defecto
         if ssh_port != 22:

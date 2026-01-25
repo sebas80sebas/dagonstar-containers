@@ -75,12 +75,6 @@ echo "Execution ID: ${{EXECUTION_ID}}"
 echo "Date: $(date)"
 echo "=========================================="
 
-# Install dependencies
-echo "Installing Python dependencies..."
-pip3 install --quiet --no-cache-dir pyserial 2>&1 | grep -v "already satisfied" || true
-echo "Dependencies installed"
-echo ""
-
 python3 << 'EOF'
 import serial, re, json, time, os
 
@@ -178,12 +172,14 @@ taskA = DagonTask(
     TaskType.DOCKER,
     "A",
     taskA_command,
-    image="python:3.9-slim",
+    image="python_dht:latest",
     ip=RASPI_IP,
     ssh_username=RASPI_USER,
     ssh_port=RASPI_PORT,
     working_dir=f"/home/{RASPI_USER}/docker_scratch_{EXECUTION_ID}/taskA",
-    volume=f"/home/{RASPI_USER}:/home/{RASPI_USER}"
+    volume=f"/home/{RASPI_USER}:/home/{RASPI_USER}",
+    devices=["/dev/ttyACM0:/dev/ttyACM0"],
+    pull=False
 )
 
 workflow.add_task(taskA)
@@ -213,12 +209,6 @@ echo "Starting preprocessing (Docker)" >> "$LOG_FILE"
 echo "Execution ID: ${{EXECUTION_ID}}" >> "$LOG_FILE"
 echo "Date: $(date)" >> "$LOG_FILE"
 echo "==========================================" >> "$LOG_FILE"
-
-# Install pandas
-echo "Installing pandas..." >> "$LOG_FILE"
-pip3 install --quiet --no-cache-dir pandas 2>&1 | grep -v "already satisfied" >> "$LOG_FILE" || true
-echo "Pandas installed" >> "$LOG_FILE"
-echo "" >> "$LOG_FILE"
 
 python3 << 'EOF' >> "$LOG_FILE" 2>&1
 import json, glob, os, time
@@ -328,12 +318,13 @@ taskB = DagonTask(
     TaskType.DOCKER,
     "B",
     taskB_command,
-    image="python:3.9-slim",
+    image="python_dht:latest",
     ip=RASPI_IP,
     ssh_username=RASPI_USER,
     ssh_port=RASPI_PORT,
     working_dir=f"/home/{RASPI_USER}/docker_scratch_{EXECUTION_ID}/taskB",
-    volume=f"/home/{RASPI_USER}:/home/{RASPI_USER}"
+    volume=f"/home/{RASPI_USER}:/home/{RASPI_USER}",
+    pull=False
 )
 
 workflow.add_task(taskB)
@@ -358,12 +349,6 @@ echo "Execution ID: ${{EXECUTION_ID}}" >> "$LOG_FILE"
 echo "Date: $(date)" >> "$LOG_FILE"
 echo "MongoDB: {MONGO_URI}" >> "$LOG_FILE"
 echo "==========================================" >> "$LOG_FILE"
-
-# Install pymongo
-echo "Installing pymongo..." >> "$LOG_FILE"
-pip3 install --quiet --no-cache-dir pymongo 2>&1 | grep -v "already satisfied" >> "$LOG_FILE" || true
-echo "Pymongo installed" >> "$LOG_FILE"
-echo "" >> "$LOG_FILE"
 
 python3 << 'PYEOF' >> "$LOG_FILE" 2>&1
 import json, re, time, os
@@ -480,12 +465,13 @@ taskC = DagonTask(
     TaskType.DOCKER,
     "C",
     taskC_command,
-    image="python:3.9-slim",
+    image="python_dht:latest",
     ip=RASPI_IP,
     ssh_username=RASPI_USER,
     ssh_port=RASPI_PORT,
     working_dir=f"/home/{RASPI_USER}/docker_scratch_{EXECUTION_ID}/taskC",
-    volume=f"/home/{RASPI_USER}:/home/{RASPI_USER}"
+    volume=f"/home/{RASPI_USER}:/home/{RASPI_USER}",
+    pull=False
 )
 
 workflow.add_task(taskC)
