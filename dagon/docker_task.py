@@ -222,7 +222,7 @@ class DockerRemoteTask(RemoteTask, DockerTask):
     """
 
     def __init__(self, name, command, image=None, container_id=None, ip=None, ssh_username=None, keypath=None,
-                 working_dir=None, remove=True, globusendpoint=None, volume=None):  # AÑADE volume
+                 working_dir=None, remove=True, globusendpoint=None, volume=None, ssh_port=22):  # AÑADE ssh_port=22
         """
         :param name: task name
         :type name: str
@@ -253,13 +253,23 @@ class DockerRemoteTask(RemoteTask, DockerTask):
         
         :param volume: Volume to mount in the container (host_path:container_path)
         :type volume: str
+        
+        :param ssh_port: SSH port (default: 22)
+        :type ssh_port: int
         """
 
         DockerTask.__init__(self, name, command, container_id=container_id, working_dir=working_dir, image=image,
-                            remove=remove, globusendpoint=globusendpoint, volume=volume)  # AÑADE volume
+                            remove=remove, globusendpoint=globusendpoint, volume=volume)
         RemoteTask.__init__(self, name=name, ssh_username=ssh_username, keypath=keypath, command=command, ip=ip,
-                            working_dir=working_dir, globusendpoint=globusendpoint)
-        self.docker_client2 = docker.DockerClient(base_url=f"ssh://{ssh_username}@{ip}", timeout=300)
+                            working_dir=working_dir, globusendpoint=globusendpoint, ssh_port=ssh_port)  # AÑADE ssh_port
+        
+        # Construir la URL SSH con el puerto si no es el 22 por defecto
+        if ssh_port != 22:
+            base_url = f"ssh://{ssh_username}@{ip}:{ssh_port}"
+        else:
+            base_url = f"ssh://{ssh_username}@{ip}"
+            
+        self.docker_client2 = docker.DockerClient(base_url=base_url, timeout=300)
 
     def on_execute(self, launcher_script, script_name):
         """
