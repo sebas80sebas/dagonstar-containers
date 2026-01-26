@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Dagon DHT Workflow - Docker Version with UNIFIED METRICS
-Matches Apptainer metrics structure exactly for fair comparison
+Dagon DHT Workflow with Energy Metrics Capture
+Integrates: DHT sensor + MongoDB + Prometheus energy metrics
 """
 
 import json, configparser, logging, time
@@ -383,6 +383,48 @@ echo "✓ Task C completed" | tee -a "$LOG_FILE"
 exit $?
 """
 
+# ========== WORKFLOW EVENT FUNCTIONS ==========
+def write_workflow_event(metric_name, workflow_name, execution_id):
+    """
+    Writes a point-in-time metric for Prometheus on the Raspberry Pi via SSH
+    """
+    metrics_dir = "/var/lib/node_exporter/textfile_collector"
+    tmp_file = f"/tmp/{metric_name}.prom"
+    final_file = f"{metrics_dir}/{metric_name}.prom"
+    
+    timestamp = int(time.time() * 1000)
+    
+    metric = f"""# HELP {metric_name} Dagon workflow event
+# TYPE {metric_name} gauge
+{metric_name}{{workflow="{workflow_name}",execution_id="{execution_id}"}} {timestamp}
+"""
+    
+    try:
+        ssh_cmd = [
+            'ssh',
+            '-p', str(RASPI_PORT),
+            f'{RASPI_USER}@{RASPI_IP}',
+            f"cat > {tmp_file} << 'EOF'\n{metric}EOF\nmv {tmp_file} {final_file} && chmod 644 {final_file}"
+        ]
+        
+        result = subprocess.run(
+            ssh_cmd,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode == 0:
+            print(f"Workflow event published: {metric_name}")
+        else:
+            print(f"Warning: Could not write workflow event {metric_name}")
+            
+    except subprocess.TimeoutExpired:
+        print(f"Timeout writing workflow event {metric_name}")
+    except Exception as e:
+        print(f"Could not write workflow event {metric_name}: {e}")
+
+
 # ========== EXECUTION FUNCTION ==========
 def execute_with_transfer():
     """Execute workflow with file transfer"""
@@ -472,6 +514,13 @@ energy_collector = PrometheusMetricsCollector(
 print("Starting energy monitoring...\n")
 energy_collector.start_collection()
 
+# ========== WRITE WORKFLOW START EVENT ==========
+write_workflow_event(
+    metric_name="dagon_workflow_start",
+    workflow_name="DHT-Sensor-Capture-And-Preprocess",
+    execution_id=EXECUTION_ID
+)
+
 workflow_start = time.time()
 
 try:
@@ -482,6 +531,13 @@ except Exception as e:
     print(f"\n✗ Error: {e}")
     import traceback
     traceback.print_exc()
+
+# ========== WRITE WORKFLOW END EVENT ==========
+write_workflow_event(
+    metric_name="dagon_workflow_end",
+    workflow_name="DHT-Sensor-Capture-And-Preprocess",
+    execution_id=EXECUTION_ID
+)
 
 workflow_end = time.time()
 workflow_duration = workflow_end - workflow_start
