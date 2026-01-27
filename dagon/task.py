@@ -31,6 +31,7 @@ class TaskType(Enum):
     DOCKER = "docker"
     KUBERNETES = "kubernetes"
     APPTAINER = "apptainer"
+    NOMAD = "nomad"
 
 
 # Different types os tasks and their module and class name
@@ -41,7 +42,8 @@ tasks_types = {
     TaskType.DOCKER: ("dagon.docker_task", "DockerTask"),
     TaskType.SLURM: ("dagon.batch", "Slurm"),
     TaskType.KUBERNETES: ("dagon.kubernetes_task", "KubernetesTask"),
-    TaskType.APPTAINER: ("dagon.apptainer_task", "ApptainerTask")
+    TaskType.APPTAINER: ("dagon.apptainer_task", "ApptainerTask"),
+    TaskType.NOMAD: ("dagon.nomad_task", "NomadTask")
 }
 
 
