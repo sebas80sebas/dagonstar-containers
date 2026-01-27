@@ -116,7 +116,7 @@ taskA = DagonTask(
     TaskType.KUBERNETES,
     "A",
     taskA_command,
-    image="bash:5",
+    image="alpine:latest",
     ip=RASPI_IP,
     ssh_username=RASPI_USER,
     ssh_port=RASPI_PORT
@@ -172,7 +172,7 @@ echo ""
 # Check if gzip is available
 if ! command -v gzip &> /dev/null; then
     echo "Installing gzip..."
-    apt-get update && apt-get install -y gzip
+    apk add --no-cache gzip bash coreutils
 fi
 
 echo "Running compression on Kubernetes pod..."
@@ -245,7 +245,7 @@ taskB = DagonTask(
     TaskType.KUBERNETES,
     "B",
     taskB_command,
-    image="ubuntu:22.04",
+    image="alpine:latest",
     ip=RASPI_IP,
     ssh_username=RASPI_USER,
     ssh_port=RASPI_PORT

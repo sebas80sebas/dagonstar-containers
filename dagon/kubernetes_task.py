@@ -30,7 +30,8 @@ class KubernetesTask(Batch):
             return super(KubernetesTask, cls).__new__(cls)
 
     def __init__(self, name, command, image="ubuntu:20.04", namespace="default",
-                 working_dir=None, remove=False, transversal_workflow=None, cleanup_timeout=30):
+                 working_dir=None, remove=False, transversal_workflow=None, cleanup_timeout=30,
+                 volumes=None, devices=None, privileged=False):
         """
         Initializes the Kubernetes task.
 
@@ -42,6 +43,9 @@ class KubernetesTask(Batch):
             working_dir (str, optional): Working directory for the task.
             remove (bool): If True, removes the pod upon completion.
             transversal_workflow: Transversal workflow if applicable.
+            volumes (list): List of volume mounts in format ["host_path:container_path", ...]
+            devices (list): List of device mounts in format ["/dev/device:/dev/device", ...]
+            privileged (bool): Run container in privileged mode (needed for device access)
         """
         # Initialize the base Dagon task
         Task.__init__(self, name, command, working_dir=working_dir,
@@ -57,6 +61,9 @@ class KubernetesTask(Batch):
         self.namespace = namespace
         self.remove = remove
         self.cleanup_timeout = cleanup_timeout
+        self.volumes = volumes or []
+        self.devices = devices or []
+        self.privileged = privileged
 
         # Assigned when the pod is created
         self.pod_name = None
@@ -75,6 +82,7 @@ class KubernetesTask(Batch):
         Creates a pod in Kubernetes only if it doesn't already exist (avoids duplicates).
 
         - The pod is kept in 'sleep infinity' state to allow multiple executions.
+        - Supports hostPath volumes and device mounts
         """
         if self.pod_name is not None:
             # Pod already exists, reuse it
@@ -84,20 +92,75 @@ class KubernetesTask(Batch):
         # Generate a unique name using UUID and timestamp
         self.pod_name = f"{self.name.lower()}-{uuid.uuid4().hex[:8]}-{int(time.time()*1000)}"
 
+        # Build container spec
+        container_spec = {
+            "name": "main",
+            "image": self.image,
+            "command": ["/bin/bash", "-c", "sleep infinity"],
+        }
+
+        # Add privileged mode if needed (required for device access)
+        if self.privileged or self.devices:
+            container_spec["securityContext"] = {"privileged": True}
+
+        # Add volume mounts
+        volume_mounts = []
+        volumes = []
+        
+        # Process regular volumes
+        for idx, vol in enumerate(self.volumes):
+            if ':' in vol:
+                host_path, container_path = vol.split(':', 1)
+                vol_name = f"vol-{idx}"
+                
+                volume_mounts.append({
+                    "name": vol_name,
+                    "mountPath": container_path
+                })
+                
+                volumes.append({
+                    "name": vol_name,
+                    "hostPath": {
+                        "path": host_path,
+                        "type": "DirectoryOrCreate"
+                    }
+                })
+        
+        # Process device mounts
+        for idx, dev in enumerate(self.devices):
+            if ':' in dev:
+                host_dev, container_dev = dev.split(':', 1)
+                dev_name = f"dev-{idx}"
+                
+                volume_mounts.append({
+                    "name": dev_name,
+                    "mountPath": container_dev
+                })
+                
+                volumes.append({
+                    "name": dev_name,
+                    "hostPath": {
+                        "path": host_dev,
+                        "type": "CharDevice"
+                    }
+                })
+        
+        if volume_mounts:
+            container_spec["volumeMounts"] = volume_mounts
+
         # Pod definition
         pod_manifest = {
             "apiVersion": "v1",
             "kind": "Pod",
             "metadata": {"name": self.pod_name, "labels": {"app": self.name}},
             "spec": {
-                "containers": [{
-                    "name": "main",
-                    "image": self.image,
-                    "command": ["/bin/bash", "-c", "sleep infinity"],
-                }],
+                "containers": [container_spec],
                 "restartPolicy": "Never"
             }
         }
+        
+        if volumes:
+            pod_manifest["spec"]["volumes"] = volumes
 
         try:
             self.v1.create_namespaced_pod(namespace=self.namespace, body=pod_manifest)
@@ -355,12 +418,16 @@ class RemoteKubernetesTask(RemoteTask, KubernetesTask):
 
     def __init__(self, name, command, image="ubuntu:20.04", namespace="default",
                  ip=None, ssh_username=None, keypath=None, ssh_port=22,
-                 working_dir=None, remove=False, transversal_workflow=None):
+                 working_dir=None, remove=False, transversal_workflow=None,
+                 volumes=None, devices=None, privileged=False):
         """
         Initializes the remote Kubernetes task.
         
         :param ssh_port: SSH port (default: 22)
         :type ssh_port: int
+        :param volumes: List of volume mounts ["host_path:container_path", ...]
+        :param devices: List of device mounts ["/dev/device:/dev/device", ...]
+        :param privileged: Run container in privileged mode
         """
         # CRITICAL: First initialize RemoteTask to establish ssh_connection
         RemoteTask.__init__(self, name=name, ssh_username=ssh_username,
@@ -374,6 +441,9 @@ class RemoteKubernetesTask(RemoteTask, KubernetesTask):
         self.image = image
         self.namespace = namespace
         self.remove = remove
+        self.volumes = volumes or []
+        self.devices = devices or []
+        self.privileged = privileged
 
         # Pod information
         self.pod_name = None
@@ -415,7 +485,7 @@ class RemoteKubernetesTask(RemoteTask, KubernetesTask):
 
     def create_pod(self):
         """
-        Creates a pod in the remote Kubernetes cluster.
+        Creates a pod in the remote Kubernetes cluster with volume and device support.
         """
         if self.pod_name is not None:
             print(f"Reusing existing remote pod: {self.pod_name}")
@@ -430,20 +500,75 @@ class RemoteKubernetesTask(RemoteTask, KubernetesTask):
 
             print(f"Creating remote pod: {self.pod_name} on {self.ip}")
 
+            # Build container spec
+            container_spec = {
+                "name": "main",
+                "image": self.image,
+                "command": ["/bin/bash", "-c", "sleep infinity"],
+            }
+
+            # Add privileged mode if needed (required for device access)
+            if self.privileged or self.devices:
+                container_spec["securityContext"] = {"privileged": True}
+
+            # Add volume mounts
+            volume_mounts = []
+            volumes = []
+            
+            # Process regular volumes
+            for idx, vol in enumerate(self.volumes):
+                if ':' in vol:
+                    host_path, container_path = vol.split(':', 1)
+                    vol_name = f"vol-{idx}"
+                    
+                    volume_mounts.append({
+                        "name": vol_name,
+                        "mountPath": container_path
+                    })
+                    
+                    volumes.append({
+                        "name": vol_name,
+                        "hostPath": {
+                            "path": host_path,
+                            "type": "DirectoryOrCreate"
+                        }
+                    })
+            
+            # Process device mounts
+            for idx, dev in enumerate(self.devices):
+                if ':' in dev:
+                    host_dev, container_dev = dev.split(':', 1)
+                    dev_name = f"dev-{idx}"
+                    
+                    volume_mounts.append({
+                        "name": dev_name,
+                        "mountPath": container_dev
+                    })
+                    
+                    volumes.append({
+                        "name": dev_name,
+                        "hostPath": {
+                            "path": host_dev,
+                            "type": "CharDevice"
+                        }
+                    })
+            
+            if volume_mounts:
+                container_spec["volumeMounts"] = volume_mounts
+
             # Create pod manifest as JSON
             pod_manifest = {
                 "apiVersion": "v1",
                 "kind": "Pod",
                 "metadata": {"name": self.pod_name, "labels": {"app": self.name}},
                 "spec": {
-                    "containers": [{
-                        "name": "main",
-                        "image": self.image,
-                        "command": ["/bin/bash", "-c", "sleep infinity"],
-                    }],
+                    "containers": [container_spec],
                     "restartPolicy": "Never"
                 }
             }
+            
+            if volumes:
+                pod_manifest["spec"]["volumes"] = volumes
 
             # Write manifest to temporary file on remote machine
             manifest_path = f"/tmp/{self.pod_name}-manifest.json"
