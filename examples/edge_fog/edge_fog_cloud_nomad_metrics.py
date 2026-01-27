@@ -490,12 +490,7 @@ try:
         "all_tasks_successful": (
             metrics.get('task_A_task_success', 0) == 1 and 
             metrics.get('task_B_task_success', 0) == 1
-        ),
-        "tasks": {{
-            "A": {{"node": "edge", "type": "capture"}},
-            "B": {{"node": "fog", "type": "preprocess"}},
-            "C": {{"node": "fog", "type": "storage"}}
-        }}
+        )
     }}
     
     result = collection.insert_one(document)
