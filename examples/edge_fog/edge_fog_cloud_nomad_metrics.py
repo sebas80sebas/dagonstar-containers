@@ -118,8 +118,8 @@ if [ -f /.dockerenv ] || grep -q docker /proc/1/cgroup 2>/dev/null; then
         python3 << 'EOF'
 import json, time, random
 
-# Simulate DHT11 readings for 30 seconds (instead of 300)
-DURATION = 30
+# Simulate DHT11 readings for 300 seconds
+DURATION = 300
 OUTPUT_FILE = 'output.json'
 
 print(f"Simulating DHT11 sensor for {{DURATION}}s...")
