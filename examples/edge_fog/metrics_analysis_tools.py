@@ -246,59 +246,62 @@ class EnergyAnalyzer:
         """
         df = self.export_energy_to_csv("temp_energy.csv", limit)
 
-        if df.empty:
-            print("No data available for plotting")
-            return
+        # Prepare X-axis labels starting from 1
+        x_indices = range(1, len(df) + 1)
 
         fig, axes = plt.subplots(3, 2, figsize=(15, 12))
 
         # 1. Total energy consumption per execution
         ax = axes[0, 0]
         df['total_energy_wh'] = df['rpi_energy_wh'] + df['pc_energy_wh']
-        ax.bar(range(len(df)), df['total_energy_wh'], color='steelblue', alpha=0.7)
-        ax.set_xlabel('Execution')
+        ax.bar(x_indices, df['total_energy_wh'], color='steelblue', alpha=0.7)
+        ax.set_xlabel('Execution Number')
         ax.set_ylabel('Energy (Wh)')
         ax.set_title('Total Energy Consumption per Execution')
+        ax.set_xticks(x_indices) # Force integer ticks
         ax.grid(True, alpha=0.3)
 
         # 2. RasPi vs PC energy distribution
         ax = axes[0, 1]
-        x = range(len(df))
-        ax.bar(x, df['rpi_energy_wh'], label='Raspberry Pi', alpha=0.7)
-        ax.bar(x, df['pc_energy_wh'], bottom=df['rpi_energy_wh'], label='PC', alpha=0.7)
-        ax.set_xlabel('Execution')
+        ax.bar(x_indices, df['rpi_energy_wh'], label='Raspberry Pi', alpha=0.7)
+        ax.bar(x_indices, df['pc_energy_wh'], bottom=df['rpi_energy_wh'], label='PC', alpha=0.7)
+        ax.set_xlabel('Execution Number')
         ax.set_ylabel('Energy (Wh)')
         ax.set_title('Energy Distribution: RasPi vs PC')
+        ax.set_xticks(x_indices) # Force integer ticks
         ax.legend()
         ax.grid(True, alpha=0.3)
 
         # 3. Mean power (W)
         ax = axes[1, 0]
-        ax.plot(df['rpi_power_mean_w'], 'o-', label='RasPi Mean Power', linewidth=2)
-        ax.plot(df['pc_power_mean_w'], 's-', label='PC Mean Power', linewidth=2)
-        ax.set_xlabel('Execution')
+        ax.plot(x_indices, df['rpi_power_mean_w'], 'o-', label='RasPi Mean Power', linewidth=2)
+        ax.plot(x_indices, df['pc_power_mean_w'], 's-', label='PC Mean Power', linewidth=2)
+        ax.set_xlabel('Execution Number')
         ax.set_ylabel('Power (W)')
         ax.set_title('Mean Power Consumption')
+        ax.set_xticks(x_indices) # Force integer ticks
         ax.legend()
         ax.grid(True, alpha=0.3)
 
         # 4. CPU usage (%)
         ax = axes[1, 1]
-        ax.plot(df['rpi_cpu_mean_pct'], 'o-', label='RasPi CPU %', linewidth=2)
-        ax.plot(df['pc_cpu_mean_pct'], 's-', label='PC CPU %', linewidth=2)
-        ax.set_xlabel('Execution')
+        ax.plot(x_indices, df['rpi_cpu_mean_pct'], 'o-', label='RasPi CPU %', linewidth=2)
+        ax.plot(x_indices, df['pc_cpu_mean_pct'], 's-', label='PC CPU %', linewidth=2)
+        ax.set_xlabel('Execution Number')
         ax.set_ylabel('CPU %')
         ax.set_title('CPU Utilization')
+        ax.set_xticks(x_indices) # Force integer ticks
         ax.legend()
         ax.grid(True, alpha=0.3)
 
         # 5. Energy efficiency (mWh per record)
         ax = axes[2, 0]
         df['efficiency'] = (df['total_energy_wh'] / df['records_count']) * 1000
-        ax.plot(df['efficiency'], 'o-', color='green', linewidth=2)
-        ax.set_xlabel('Execution')
+        ax.plot(x_indices, df['efficiency'], 'o-', color='green', linewidth=2)
+        ax.set_xlabel('Execution Number')
         ax.set_ylabel('mWh per Record')
         ax.set_title('Energy Efficiency')
+        ax.set_xticks(x_indices) # Force integer ticks
         ax.grid(True, alpha=0.3)
 
         # 6. Duration vs energy (colored by number of records)
@@ -320,7 +323,7 @@ class EnergyAnalyzer:
         plt.tight_layout()
         plt.savefig('energy_trends.png', dpi=300, bbox_inches='tight')
         print("✅ Plots saved to: energy_trends.png")
-        plt.show()
+        # plt.show()  # Commented out to prevent hanging in terminal
 
 
 def main():
@@ -332,15 +335,15 @@ def main():
         print("Energy Analysis Tools")
         print("=" * 70)
         print("\nUsage:")
-        print("  python3 energy_analysis_tools.py summary [limit]")
-        print("  python3 energy_analysis_tools.py compare [limit]")
-        print("  python3 energy_analysis_tools.py export [output.csv]")
-        print("  python3 energy_analysis_tools.py plot [limit]")
+        print("  python3 metrics_analysis_tools.py summary [limit]")
+        print("  python3 metrics_analysis_tools.py compare [limit]")
+        print("  python3 metrics_analysis_tools.py export [output.csv]")
+        print("  python3 metrics_analysis_tools.py plot [limit]")
         print("\nExamples:")
-        print("  python3 energy_analysis_tools.py summary 10")
-        print("  python3 energy_analysis_tools.py compare 5")
-        print("  python3 energy_analysis_tools.py export energy_data.csv")
-        print("  python3 energy_analysis_tools.py plot 20")
+        print("  python3 metrics_analysis_tools.py summary 10")
+        print("  python3 metrics_analysis_tools.py compare 5")
+        print("  python3 metrics_analysis_tools.py export energy_data.csv")
+        print("  python3 metrics_analysis_tools.py plot 20")
         sys.exit(1)
 
     command = sys.argv[1]

@@ -19,7 +19,7 @@ if __name__ == '__main__':
     SSH_PORT = config.getint('ssh', 'ssh_port')
 
     # Create workflow
-    workflow = Workflow("DataFlow-Demo-K8s-Remote")
+    workflow = Workflow("DataFlow-Demo-K3S-Remote")
 
     # Task A: Create directory and write hostname
     taskA = DagonTask(
@@ -76,10 +76,10 @@ if __name__ == '__main__':
 
     # Save workflow as JSON
     jsonWorkflow = workflow.as_json()
-    with open('dataflow-demo-k8s-remote.json', 'w') as outfile:
+    with open('dataflow-demo-k3s-remote.json', 'w') as outfile:
         stringWorkflow = json.dumps(jsonWorkflow, sort_keys=True, indent=2)
         outfile.write(stringWorkflow)
-    print("✓ Workflow saved to: dataflow-demo-k8s-remote.json")
+    print("✓ Workflow saved to: dataflow-demo-k3s-remote.json")
 
     # Run workflow
     print("\n" + "="*60)
