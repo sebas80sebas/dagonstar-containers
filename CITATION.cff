@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "DAGonStar Containers: Container Virtualization Frameworks for Edge-to-Cloud and Serverless Workflow Execution"
+type: software
+authors:
+  - family-names: "Loor Weir"
+    given-names: "Iván Sebastián"
+    affiliation: "Universidad Carlos III de Madrid (UC3M)"
+repository-code: "https://github.com/sebas80sebas/dagonstar-containers"
+url: "https://github.com/sebas80sebas/dagonstar-containers"
+license: Apache-2.0
+version: 1.0.0
+date-released: "2026-09-16"
+keywords:
+  - edge-to-cloud computing
+  - container virtualization
+  - Docker
+  - Apptainer
+  - Kubernetes
+  - HashiCorp Nomad
+  - scientific workflows
+  - DAGonStar
+  - energy efficiency
+preferred-citation:
+  type: article
+  title: "Evaluating Container Virtualization Frameworks for Edge-to-Cloud and Serverless Workflow Execution: Extending the DAGonStar Engine"
+  authors:
+    - family-names: "Loor Weir"
+      given-names: "Iván Sebastián"
+      affiliation: "Universidad Carlos III de Madrid (UC3M)"
+  year: 2026
+  # doi: "10.5281/zenodo.XXXXXXX"   # <-- uncomment and fill in once the Zenodo DOI is issued (Step 4 below)
