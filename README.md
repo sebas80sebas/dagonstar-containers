@@ -1,6 +1,6 @@
 # DAGonStar (aka DAGon*)
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22801294.svg)](https://doi.org/10.5281/zenodo.22801294)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22801293.svg)](https://doi.org/10.5281/zenodo.22801293)
 
 DAGonStar (Direct acyclic graph On anything) is a lightweight Python library implementing a workflow engine able to execute parallel jobs represented by direct acyclic graphs on any combination of local machines, on-premise high-performance computing clusters, containers, and cloud-based virtual infrastructures.
 

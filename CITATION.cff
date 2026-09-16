@@ -11,6 +11,13 @@ url: "https://github.com/sebas80sebas/dagonstar-containers"
 license: Apache-2.0
 version: 1.0.0
 date-released: "2026-09-16"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.22801294"
+    description: "This is the archived snapshot of version 1.0.0 of this software."
+  - type: doi
+    value: "10.5281/zenodo.22801293"
+    description: "This is the concept DOI, which always resolves to the latest version of this software."
 keywords:
   - edge-to-cloud computing
   - container virtualization
@@ -29,4 +36,4 @@ preferred-citation:
       given-names: "Iván Sebastián"
       affiliation: "Universidad Carlos III de Madrid (UC3M)"
   year: 2026
-  # doi: "10.5281/zenodo.XXXXXXX"   # <-- uncomment and fill in once the Zenodo DOI is issued (Step 4 below)
+  # doi: "10.5281/zenodo.XXXXXXX"   # <-- rellenar cuando publiques el depósito "Publication" del PDF del paper
