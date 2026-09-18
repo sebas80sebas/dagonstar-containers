@@ -36,4 +36,7 @@ preferred-citation:
       given-names: "Iván Sebastián"
       affiliation: "Universidad Carlos III de Madrid (UC3M)"
   year: 2026
-  # doi: "10.5281/zenodo.XXXXXXX"   # <-- rellenar cuando publiques el depósito "Publication" del PDF del paper
+  version: "1.0"
+  doi: "10.5281/zenodo.22818702"
+  url: "https://doi.org/10.5281/zenodo.22818701"
+  notes: "10.5281/zenodo.22818702 is the archived snapshot of version 1.0; 10.5281/zenodo.22818701 is the concept DOI that always resolves to the latest version of the paper."
